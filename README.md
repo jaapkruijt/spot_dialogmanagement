@@ -21,3 +21,9 @@ On external input processing of state transitions and the related actions is tri
 signals to wait for further external input.
 
 External input can be an utterance from the humann player or an event published by the SPOTTER game.
+
+## Example script
+
+Run `examples/interactive_game.py`. It will ask for Human input, enter:
+* your statements there
+* if input from the game is expected, prefix it with `game:` (currently the value after the colon only needs to be non-empty)
