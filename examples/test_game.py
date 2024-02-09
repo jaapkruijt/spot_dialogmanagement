@@ -9,7 +9,7 @@ class TestDisambiguator:
         self._status = DisambiguatorStatus.AWAIT_NEXT
 
     def status(self):
-        return self._status
+        return self._status.name
 
     def advance_round(self, round_number=None, start=False):
         pass
@@ -26,12 +26,13 @@ class TestDisambiguator:
             self._status = DisambiguatorStatus.NO_MATCH
             return None, None, None, None
         elif choice == 1:
-            self._status = DisambiguatorStatus.SUCCESS
+            self._status = DisambiguatorStatus.SUCCESS_HIGH
             split_ = mention.split(" ")[-2:]
             return split_[0], 1.0, split_[1], None
-
-        self._status = random.choice([DisambiguatorStatus.MATCH_PREVIOUS, DisambiguatorStatus.MATCH_MULTIPLE])
-        return 1, 1, 1, ["differences"]
+        elif choice == 2:
+            self._status = random.choice([DisambiguatorStatus.MATCH_PREVIOUS, DisambiguatorStatus.MATCH_MULTIPLE])
+            return 1, 1, 1, ["differences"]
+        raise  ValueError()
 
 
 dialog_manager = DialogManager(TestDisambiguator(), max_position=3)
@@ -48,13 +49,13 @@ for i in GameStartStep.STATEMENTS:
     print("Input:", "bla")
     dialog_manager.utterance(random.choice([None, "bla"]))
 print("Input (Gane): submit")
-dialog_manager.submit()
+dialog_manager.game_event("test")
 
 for i in GameStartStep.STATEMENTS:
     print("Input:", "bla")
     dialog_manager.utterance(random.choice([None, "bla"]))
 print("Input (Gane): submit")
-dialog_manager.submit()
+dialog_manager.game_event("test")
 
 position = 1
 # TODO advance position, parse in test disambiguator

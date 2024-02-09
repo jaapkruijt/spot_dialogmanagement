@@ -3,18 +3,11 @@ import logging
 from enum import Enum, auto
 from typing import Optional, Any
 
+from spot.pragmatic_model.model_ambiguity import DisambiguatorStatus
+
 from spot.dialog.intro import IntroStep, GameStartStep
 
 logger = logging.getLogger(__name__)
-
-
-# from spot.pragmatic_model.model_ambiguity import Disambiguator, DisambiguatorStatus
-class DisambiguatorStatus(Enum):
-    AWAIT_NEXT = 1
-    SUCCESS = 2
-    NO_MATCH = 3
-    MATCH_MULTIPLE = 4
-    MATCH_PREVIOUS = 5
 
 
 class ConvState(Enum):
@@ -40,7 +33,7 @@ class ConvState(Enum):
             ConvState.QUERY_NEXT: [ConvState.QUERY_NEXT, ConvState.DISAMBIGUATION],
             ConvState.DISAMBIGUATION: [ConvState.DISAMBIGUATION, ConvState.REPAIR, ConvState.ACKNOWLEDGE],
             ConvState.REPAIR: [ConvState.REPAIR, ConvState.DISAMBIGUATION],
-            ConvState.ACKNOWLEDGE: [ConvState.QUERY_NEXT, ConvState.ROUND_FINISH],
+            ConvState.ACKNOWLEDGE: [ConvState.ACKNOWLEDGE, ConvState.QUERY_NEXT, ConvState.ROUND_FINISH],
             ConvState.ROUND_FINISH: [ConvState.ROUND_START, ConvState.GAME_FINISH],
             ConvState.GAME_FINISH: [ConvState.GAME_FINISH, ConvState.GAME_START]
         }
@@ -91,10 +84,9 @@ class Action:
 
 
 class DialogManager:
-    def __init__(self, disambiguator, max_position=5, acceptance_threshold=0.6, success_threshold=0.3):
+    def __init__(self, disambiguator, max_position=5, success_threshold=0.3):
         self._disambiguator = disambiguator
         self._success_threshold = success_threshold
-        self._acceptance_threshold = acceptance_threshold
         self._positions = max_position
 
         self._state = State(ConvState.GAME_START)
@@ -211,12 +203,12 @@ class DialogManager:
             next_state = state.transition(ConvState.DISAMBIGUATION if mention else state.conv_state, mention=mention)
         elif state.mention:
             disambiguation_result = self._disambiguator.disambiguate(state.mention)
-            selected, certainty, position, difference = disambiguation_result
-            success = self._disambiguator.status() == DisambiguatorStatus.SUCCESS
-            if success and certainty > self._success_threshold:
+            if DisambiguatorStatus.SUCCESS_HIGH.name == self._disambiguator.status():
                 action = Action()
-                confirmation = ConfirmationState.ACCEPTED if certainty > self._acceptance_threshold else ConfirmationState.CONFIRM
-                next_state = state.transition(ConvState.ACKNOWLEDGE, disambiguation_result=disambiguation_result, confirmation=confirmation)
+                next_state = state.transition(ConvState.ACKNOWLEDGE, disambiguation_result=disambiguation_result, confirmation=ConfirmationState.ACCEPTED)
+            elif DisambiguatorStatus.SUCCESS_LOW.name == self._disambiguator.status():
+                action = Action()
+                next_state = state.transition(ConvState.ACKNOWLEDGE, disambiguation_result=disambiguation_result, confirmation=ConfirmationState.CONFIRM)
             else:
                 action = Action()
                 next_state = state.transition(ConvState.REPAIR, disambiguation_result=disambiguation_result)
@@ -258,11 +250,11 @@ class DialogManager:
         return action, next_state
 
     def _act_repair(self, state):
-        if DisambiguatorStatus.NO_MATCH == self._disambiguator.status():
+        if DisambiguatorStatus.NO_MATCH.name == self._disambiguator.status():
             action = Action("Aha, not sure who you are referring to.. Can you be more clear?", True)
-        elif DisambiguatorStatus.MATCH_PREVIOUS == self._disambiguator.status():
+        elif DisambiguatorStatus.MATCH_PREVIOUS.name == self._disambiguator.status():
             action = Action(f"We already decided about him.", True)
-        elif DisambiguatorStatus.MATCH_MULTIPLE == self._disambiguator.status():
+        elif DisambiguatorStatus.MATCH_MULTIPLE.name == self._disambiguator.status():
             action = Action(f"Did you mean the one with the {' and '.join(state.disambiguation_result[3])}.", True)
         else:
             raise ValueError(f"Illegal state for disambiguator status: {self._disambiguator.status()}")
