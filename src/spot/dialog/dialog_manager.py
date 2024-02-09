@@ -1,9 +1,11 @@
 import dataclasses
-import random
+import logging
 from enum import Enum, auto
 from typing import Optional, Any
 
 from spot.dialog.intro import IntroStep, GameStartStep
+
+logger = logging.getLogger(__name__)
 
 
 # from spot.pragmatic_model.model_ambiguity import Disambiguator, DisambiguatorStatus
@@ -102,12 +104,12 @@ class DialogManager:
     def set_replier(self, replier):
         self._replier = replier
 
-    def submit(self):
-        print("Input: game state change")
-        self.run(None, "start")
+    def game_event(self, event):
+        logger.debug("Input (Game): %s", event)
+        self.run(None, event)
 
     def utterance(self, utterance: str):
-        print("Input:", utterance)
+        logger.debug("Input: (Text) %s", utterance)
         self.run(utterance, None)
 
     def run(self, utterance, game_transition):
@@ -116,24 +118,11 @@ class DialogManager:
             action, next_state = self.act(utterance, game_transition, self._state)
             if action.reply:
                 self._replier(action.reply)
-            print("Transition from ",self._format_state(self._state), " to ", self._format_state(next_state))
+            logger.debug("Transition from %s to %s",self._format_state(self._state), self._format_state(next_state))
             self._state = next_state
 
         # TODO Clear utterance and mention and anything else
         self._state = next_state.transition(self._state.conv_state, utterance=None, mention=None)
-
-    def _format_state(self, value):
-        if isinstance(value, dict):
-            return {k: self._format_state(v) for k, v in value.items() if v}
-        elif isinstance(value, (bool, str, int, float, type(None))):
-            return value
-        elif dataclasses.is_dataclass(value):
-            result = {k: self._format_state(v) for k, v in dataclasses.asdict(value).items() if v}
-            if 'conv_state' in result:
-                result['conv_state'] = result['conv_state'].name
-            return result
-        else:
-            return value
 
     def act(self, utterance, game_transition, state):
         if ConvState.GAME_START == state.conv_state:
@@ -313,57 +302,16 @@ class DialogManager:
     def has_next_round(self, state):
         return state.round < 3
 
+    def _format_state(self, value):
+        if isinstance(value, dict):
+            return {k: self._format_state(v) for k, v in value.items() if v}
+        elif isinstance(value, (bool, str, int, float, type(None))):
+            return value
+        elif dataclasses.is_dataclass(value):
+            result = {k: self._format_state(v) for k, v in dataclasses.asdict(value).items() if v}
+            if 'conv_state' in result:
+                result['conv_state'] = result['conv_state'].name
+            return result
+        else:
+            return value
 
-if __name__ == '__main__':
-    class TestDisambiguator:
-        def __init__(self):
-            self._status = DisambiguatorStatus.AWAIT_NEXT
-
-        def status(self):
-            return self._status
-
-        def advance_round(self, round_number=None, start=False):
-            pass
-
-        def advance_position(self):
-            pass
-
-        def disambiguate(self, mention):
-            # return disambiguator.disambiguate(mention)
-            # and check status
-            # returns selected (the referenced character), certainty, and status specific data (position, differences, etc.)
-            choice = random.choice([0, 1, 2])
-            if choice == 0:
-                self._status = DisambiguatorStatus.NO_MATCH
-                return None, None, None, None
-            elif choice == 1:
-                self._status = DisambiguatorStatus.SUCCESS
-                split_ = mention.split(" ")[-2:]
-                return split_[0], 1.0, split_[1], None
-
-            self._status = random.choice([DisambiguatorStatus.MATCH_PREVIOUS, DisambiguatorStatus.MATCH_MULTIPLE])
-            return 1, 1, 1, ["differences"]
-
-
-    dialog_manager = DialogManager(TestDisambiguator(), max_position=3)
-
-    reply = {"value": None, "position": 0}
-    def replier(reply_str):
-        reply["value"] = reply_str
-        print(reply_str)
-
-    dialog_manager.set_replier(replier)
-
-    for i in GameStartStep.STATEMENTS:
-        dialog_manager.utterance(random.choice([None, "bla"]))
-    dialog_manager.submit()
-
-    for i in GameStartStep.STATEMENTS:
-        dialog_manager.utterance(random.choice([None, "bla"]))
-    dialog_manager.submit()
-
-    position = 1
-    while position < 4:
-        dialog_manager.utterance(f"Number {position} {position}")
-        if "Goodbye" in reply["value"]:
-            exit()
