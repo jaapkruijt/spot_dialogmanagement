@@ -14,7 +14,7 @@ def replier(reply):
 
 if __name__ == '__main__':
     logging.basicConfig(
-        level=logging.ERROR,
+        level=logging.DEBUG,
         format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s - %(funcName)s: %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S',
     )
@@ -25,7 +25,7 @@ if __name__ == '__main__':
     dialog_manager.set_replier(replier)
 
     human_input = None
-    while human_input != "Goodbye":
+    while human_input != "Tot ziens".lower():
         logger.debug("Await human input", )
         human_input = input("Human > ")
         logger.debug("Human input: %s", human_input)

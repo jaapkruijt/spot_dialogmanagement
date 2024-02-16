@@ -8,7 +8,7 @@ class GameStartStep:
     statement: Optional[str] = None
     final: bool = False
 
-    STATEMENTS: ClassVar[Tuple[str, ...]] = ("Hi!", "Let's play a game!", "It will be fun!")
+    STATEMENTS: ClassVar[Tuple[str, ...]] = ("Hoi!", "Laten we een spelletje spelen.", "Leuk hoor!")
 
     def next(self):
         step = min(self.step + 1, len(self.STATEMENTS) - 1)
@@ -23,7 +23,7 @@ class IntroStep:
     statement: Optional[str] = None
     final: bool = False
 
-    STATEMENTS: ClassVar[Tuple[str, ...]] = ("Let's try!", "Select a character!", "Have fun!")
+    STATEMENTS: ClassVar[Tuple[str, ...]] = ("Laten we het even proberen.", "Selecteer een figuur.", "Veel plezier!")
 
     def next(self):
         step = min(self.step + 1, len(self.STATEMENTS) - 1)

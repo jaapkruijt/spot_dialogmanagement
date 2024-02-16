@@ -2,12 +2,38 @@ import dataclasses
 import logging
 from enum import Enum, auto
 from typing import Optional, Any
+import random
 
 from spot.pragmatic_model.model_ambiguity import DisambiguatorStatus
 
 from spot.dialog.intro import IntroStep, GameStartStep
 
 logger = logging.getLogger(__name__)
+
+# TODO is it possible to add string formatting to some phrases and not others?
+NO_MATCH_PHRASES = ['Ik begrijp niet zo goed wie je bedoelt. Kan je het nog een keer omschrijven?',
+                    'Ik snap niet zo goed wat je zei. Kan je het iets anders formuleren?']
+ACKNOWLEDGE_PHRASES = ['Oh, die staat bij mij op plek %s']
+ROUND_FINISH_PHRASES = [
+'We hebben ze allemaal gehad. Op het scherm zie je nu onze score voor deze ronde. We kunnen nu door naar de volgende ronde. Druk maar op de knop Ga Door.',
+    'Dit was het voor deze ronde. Op het scherm zie je nu onze score voor deze ronde. Laten we naar de volgende ronde gaan. Druk maar op de knop Ga Door.',
+    'Oke. Onze score voor deze ronde verschijnt nu in beeld. We gaan door naar de volgende ronde. Druk maar op de knop Ga Door.',
+    'Oke, we hebben ze allemaal gehad. Dit is onze score. Laten we doorgaan naar de volgende ronde. Druk maar op de knop Ga Door.',
+    'Deze ronde is klaar. Onze score komt nu in beeld. Druk maar op de knop Ga Door om naar de volgende ronde te gaan.'
+]
+QUERY_NEXT_PHRASES = ['En de volgende?', 'Oke, we gaan door met de volgende.', 'Oke, en de volgende?',
+                      'En de figuur die daarnaast staat?', 'En die daarnaast staat?', 'Oké, en die daarnaast staat?']
+ACKNOWLEDGE_SAME_POSITION_PHRASES = ['Oh ja, dit staat bij mij ook op die plek', 'Die staat bij mij ook op die plek.',
+                                     'He, die staat bij mij ook op die plek.', 'Ja, die staat bij mij op dezelfde plek.',
+                                     'Oh ja, die staat bij mij op dezelfde plek.']
+ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES = ['Bij mij staat die op plek %s.',
+                                          'Die staat bij mij ergens anders, namelijk op plek %s.',
+                                          'Oh, die staat bij mij op plek %s.',
+                                          'Even kijken, nee, bij mij staat die op plek %s.']
+MATCH_MULTIPLE_PHRASES = ['Wacht even, volgens mij hebben we deze al gehad. Wil je het nog een keer omschrijven?',
+                          'Even kijken hoor, ik dacht dat we deze al hadden gehad. Laten we even een stap terug.  Kan je iets noemen wat specifiek is voor die figuur?'
+                          ]
+
 
 
 class ConvState(Enum):
@@ -179,7 +205,7 @@ class DialogManager:
         game_round = state.round + 1
         self._disambiguator.advance_round(start=(game_round == 1))
 
-        action = Action("Let's start!")
+        action = Action("Laten we beginnen!")
         next_state = state.transition(ConvState.QUERY_NEXT, round=game_round, position=1, utterance=None,
                                       mention=None, disambiguation_result=None, confirmation=None)
 
@@ -187,7 +213,11 @@ class DialogManager:
 
     def _act_query_next(self, state):
         # Eventually check the disambiguator state if there is already information available
-        action = Action("What about position " + str(state.position) + " Who is there?", True)
+        # TODO if coming from repair it should ask for the same position
+        if 1 == state.position:
+            action = Action("Wie staat er bij jou op plek " + str(state.position) + "?", True)
+        else:
+            action = Action(random.choice(QUERY_NEXT_PHRASES), True)
         next_state = state.transition(ConvState.DISAMBIGUATION)
 
         return action, next_state
@@ -208,7 +238,7 @@ class DialogManager:
                 next_state = state.transition(ConvState.ACKNOWLEDGE, disambiguation_result=disambiguation_result, confirmation=ConfirmationState.ACCEPTED)
             elif DisambiguatorStatus.SUCCESS_LOW.name == self._disambiguator.status():
                 action = Action()
-                next_state = state.transition(ConvState.ACKNOWLEDGE, disambiguation_result=disambiguation_result, confirmation=ConfirmationState.CONFIRM)
+                next_state = state.transition(ConvState.ACKNOWLEDGE,  disambiguation_result=disambiguation_result, confirmation=ConfirmationState.CONFIRM)
             else:
                 action = Action()
                 next_state = state.transition(ConvState.REPAIR, disambiguation_result=disambiguation_result)
@@ -223,6 +253,10 @@ class DialogManager:
             reply = self._acknowledge(state, confirm=False)
             action = Action(reply)
 
+            # TODO solve state.mention = None
+            # selected, certainty, position, difference = state.disambiguation_result
+            # self._disambiguator.confirm_character_position(selected, state.mention)
+            # logging.debug("State mention: %s", state.mention)
             position = state.position + 1
             self._disambiguator.advance_position()
 
@@ -234,15 +268,15 @@ class DialogManager:
             action = Action(reply, True)
             next_state = state.transition(state.conv_state, confirmation=ConfirmationState.REQUESTED)
         elif ConfirmationState.REQUESTED == state.confirmation:
-            if "yes" in utterance.lower():
+            if "ja" in utterance.lower():
                 action = Action()
                 next_state = state.transition(state.conv_state, confirmation=ConfirmationState.ACCEPTED)
-            elif "no" in utterance.lower():
-                action = Action("OK, let's try again..")
+            elif "nee" in utterance.lower():
+                action = Action("Oke, we proberen het opnieuw")
                 # Restart, but stay in the same position
                 next_state = state.transition(ConvState.QUERY_NEXT, utterance=None, mention=None, disambiguation_result=None, confirmation=None)
             else:
-                action = Action("I didn't get it.. Yes or no?", True)
+                action = Action("Ik snap het niet, ja of nee?", True)
                 next_state = state
         else:
             raise ValueError("Invalid confirmation status " + str(state.confirmation))
@@ -251,11 +285,11 @@ class DialogManager:
 
     def _act_repair(self, state):
         if DisambiguatorStatus.NO_MATCH.name == self._disambiguator.status():
-            action = Action("Aha, not sure who you are referring to.. Can you be more clear?", True)
+            action = Action(random.choice(NO_MATCH_PHRASES), True)
         elif DisambiguatorStatus.MATCH_PREVIOUS.name == self._disambiguator.status():
-            action = Action(f"We already decided about him.", True)
+            action = Action(f"", True)
         elif DisambiguatorStatus.MATCH_MULTIPLE.name == self._disambiguator.status():
-            action = Action(f"Did you mean the one with the {' and '.join(state.disambiguation_result[3])}.", True)
+            action = Action(f"Bedoel je die met {' en '.join(state.disambiguation_result[3])}?", True)
         else:
             raise ValueError(f"Illegal state for disambiguator status: {self._disambiguator.status()}")
 
@@ -264,7 +298,7 @@ class DialogManager:
         return action, next_state
 
     def _act_round_finished(self, state):
-        action = Action("Let's see how you performed..")
+        action = Action(random.choice(ROUND_FINISH_PHRASES))
         next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.GAME_FINISH,
                                       round=state.round + 1)
 
@@ -285,11 +319,15 @@ class DialogManager:
         # TODO Find the mention the human used for the character (see mention detection ;)
         # or unique attributes of the character
         # ref_string = f"{selected} in position {position}"
-        ref_string = f"that one in position {position}"
+        # ref_string = f"that one in position {position}"
         if confirm:
-            return f"So {ref_string}, correct?"
+            return f"Bedoel je die met {'en '.join(difference)}?"
         else:
-            return f"I have {ref_string}."
+            if position == state.position:
+                response = random.choice(ACKNOWLEDGE_SAME_POSITION_PHRASES)
+            else:
+                response = random.choice(ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES) % position
+            return response
 
     def has_next_round(self, state):
         return state.round < 3
