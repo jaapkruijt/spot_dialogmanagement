@@ -213,11 +213,15 @@ class DialogManager:
 
     def _act_query_next(self, state):
         # Eventually check the disambiguator state if there is already information available
-        # TODO if coming from repair it should ask for the same position
-        if 1 == state.position:
-            action = Action("Wie staat er bij jou op plek " + str(state.position) + "?", True)
+        # if asking for next position
+        if DisambiguatorStatus.AWAIT_NEXT.name == self._disambiguator.status:
+            if 1 == state.position:
+                action = Action("Wie staat er bij jou op plek 1?", True)
+            else:
+                action = Action(random.choice(QUERY_NEXT_PHRASES), True)
+        # if coming from repair
         else:
-            action = Action(random.choice(QUERY_NEXT_PHRASES), True)
+            action = Action("Wie staat er bij jou op plek " + str(state.position) + "?", True)
         next_state = state.transition(ConvState.DISAMBIGUATION)
 
         return action, next_state
@@ -286,6 +290,9 @@ class DialogManager:
     def _act_repair(self, state):
         if DisambiguatorStatus.NO_MATCH.name == self._disambiguator.status():
             action = Action(random.choice(NO_MATCH_PHRASES), True)
+        elif DisambiguatorStatus.NEG_RESPONSE.name == self._disambiguator.status():
+            # TODO not sure if this is way to go
+            action = Action("Oke, kun je het op een andere manier omschrijven?", True)
         elif DisambiguatorStatus.MATCH_PREVIOUS.name == self._disambiguator.status():
             action = Action(f"", True)
         elif DisambiguatorStatus.MATCH_MULTIPLE.name == self._disambiguator.status():
