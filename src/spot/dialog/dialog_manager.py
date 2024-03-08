@@ -13,24 +13,24 @@ logger = logging.getLogger(__name__)
 # TODO is it possible to add string formatting to some phrases and not others?
 NO_MATCH_PHRASES = ['Ik begrijp niet zo goed wie je bedoelt. Kan je het nog een keer omschrijven?',
                     'Ik snap niet zo goed wat je zei. Kan je het iets anders formuleren?']
-ACKNOWLEDGE_PHRASES = ['Oh, die staat bij mij op plek %s']
+# ACKNOWLEDGE_PHRASES = ['Oh, die staat bij mij op plek %s']
 ROUND_FINISH_PHRASES = [
-'We hebben ze allemaal gehad. Op het scherm zie je nu onze score voor deze ronde. We kunnen nu door naar de volgende ronde. Druk maar op de knop Ga Door.',
-    'Dit was het voor deze ronde. Op het scherm zie je nu onze score voor deze ronde. Laten we naar de volgende ronde gaan. Druk maar op de knop Ga Door.',
-    'Oke. Onze score voor deze ronde verschijnt nu in beeld. We gaan door naar de volgende ronde. Druk maar op de knop Ga Door.',
-    'Oke, we hebben ze allemaal gehad. Dit is onze score. Laten we doorgaan naar de volgende ronde. Druk maar op de knop Ga Door.',
-    'Deze ronde is klaar. Onze score komt nu in beeld. Druk maar op de knop Ga Door om naar de volgende ronde te gaan.'
+'We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het scherm zie je nu onze score voor deze ronde. We kunnen nu door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
+    'Dit was het voor deze ronde. Druk maar op de knop Ga Door. Op het scherm zie je nu onze score voor deze ronde. Laten we naar de volgende ronde gaan. Druk maar weer op de knop Ga Door.',
+    'Oke. Druk maar op de knop Ga Door. Onze score voor deze ronde verschijnt nu in beeld. We gaan door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
+    'Oke, we hebben ze allemaal gehad. Druk maar op de knop Ga Door. Dit is onze score. Laten we doorgaan naar de volgende ronde. Druk maar weer op de knop Ga Door.',
+    'Deze ronde is klaar. Druk maar op de knop Ga Door. Onze score komt nu in beeld. Druk op de knop Ga Door om naar de volgende ronde te gaan.'
 ]
 QUERY_NEXT_PHRASES = ['En de volgende?', 'Oke, we gaan door met de volgende.', 'Oke, en de volgende?',
                       'En de figuur die daarnaast staat?', 'En die daarnaast staat?', 'Oké, en die daarnaast staat?']
-ACKNOWLEDGE_SAME_POSITION_PHRASES = ['Oh ja, dit staat bij mij ook op die plek', 'Die staat bij mij ook op die plek.',
-                                     'He, die staat bij mij ook op die plek.', 'Ja, die staat bij mij op dezelfde plek.',
-                                     'Oh ja, die staat bij mij op dezelfde plek.']
-ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES = ['Bij mij staat die op plek %s.',
-                                          'Die staat bij mij ergens anders, namelijk op plek %s.',
-                                          'Oh, die staat bij mij op plek %s.',
-                                          'Even kijken, nee, bij mij staat die op plek %s.']
-MATCH_MULTIPLE_PHRASES = ['Wacht even, volgens mij hebben we deze al gehad. Wil je het nog een keer omschrijven?',
+ACKNOWLEDGE_SAME_POSITION_PHRASES = ['Oh ja, %s staat bij mij ook op plek {position}', '%s staat bij mij ook op die plek.',
+                                     'He, %s staat bij mij ook op die plek.', 'Ja, %s staat bij mij op dezelfde plek.',
+                                     'Oh ja, %s staat bij mij op dezelfde plek.']
+ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES = ['Bij mij staat %s op plek {position}.',
+                                          '%s staat bij mij ergens anders, namelijk op plek {position}.',
+                                          'Oh, %s staat bij mij op plek {position}.',
+                                          'Even kijken, nee, bij mij staat %s op plek {position}.']
+MATCH_PREVIOUS_PHRASES = ['Wacht even, volgens mij hebben we deze al gehad. Wil je het nog een keer omschrijven?',
                           'Even kijken hoor, ik dacht dat we deze al hadden gehad. Laten we even een stap terug.  Kan je iets noemen wat specifiek is voor die figuur?'
                           ]
 
@@ -110,10 +110,11 @@ class Action:
 
 
 class DialogManager:
-    def __init__(self, disambiguator, max_position=5, success_threshold=0.3):
+    def __init__(self, disambiguator, max_position=5, success_threshold=0.3, high_engagement=True):
         self._disambiguator = disambiguator
         self._success_threshold = success_threshold
         self._positions = max_position
+        self.high_engagement = high_engagement
 
         self._state = State(ConvState.GAME_START)
         self._round = 0
@@ -132,12 +133,18 @@ class DialogManager:
 
     def run(self, utterance, game_transition):
         action = Action()
+        reply = ""
         while not action.await_input:
             action, next_state = self.act(utterance, game_transition, self._state)
             if action.reply:
-                self._replier(action.reply)
-            logger.debug("Transition from %s to %s",self._format_state(self._state), self._format_state(next_state))
+                if reply:
+                    reply += " \\pau=value\\" + action.reply
+                else:
+                    reply = action.reply
+            logger.debug("Transition from %s to %s", self._format_state(self._state), self._format_state(next_state))
             self._state = next_state
+
+        self._replier(reply)
 
         # TODO Clear utterance and mention and anything else
         self._state = next_state.transition(self._state.conv_state, utterance=None, mention=None)
@@ -262,7 +269,8 @@ class DialogManager:
             # self._disambiguator.confirm_character_position(selected, state.mention)
             # logging.debug("State mention: %s", state.mention)
             position = state.position + 1
-            self._disambiguator.advance_position()
+            if position < 6:
+                self._disambiguator.advance_position()
 
             next_state = state.transition(
                 ConvState.QUERY_NEXT if position <= self._positions else ConvState.ROUND_FINISH,
@@ -294,9 +302,10 @@ class DialogManager:
             # TODO not sure if this is way to go
             action = Action("Oke, kun je het op een andere manier omschrijven?", True)
         elif DisambiguatorStatus.MATCH_PREVIOUS.name == self._disambiguator.status():
-            action = Action(f"", True)
+            action = Action(random.choice(MATCH_PREVIOUS_PHRASES), True)
         elif DisambiguatorStatus.MATCH_MULTIPLE.name == self._disambiguator.status():
-            action = Action(f"Bedoel je die met {' en '.join(state.disambiguation_result[3])}?", True)
+            description = state.disambiguation_result[3]
+            action = Action(f"{description}?", True)
         else:
             raise ValueError(f"Illegal state for disambiguator status: {self._disambiguator.status()}")
 
@@ -322,22 +331,29 @@ class DialogManager:
         return utterance
 
     def _acknowledge(self, state, confirm):
-        selected, certainty, position, difference = state.disambiguation_result
+        selected, certainty, position, description = state.disambiguation_result
         # TODO Find the mention the human used for the character (see mention detection ;)
         # or unique attributes of the character
         # ref_string = f"{selected} in position {position}"
         # ref_string = f"that one in position {position}"
         if confirm:
-            return f"Bedoel je die met {'en '.join(difference)}?"
+            return f"{description}?"
         else:
-            if position == state.position:
-                response = random.choice(ACKNOWLEDGE_SAME_POSITION_PHRASES)
+            if self.high_engagement:
+                if position == state.position:
+                    response = random.choice(ACKNOWLEDGE_SAME_POSITION_PHRASES).format_map({"position": position}) % description
+                else:
+                    response = random.choice(ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES).format_map({"position": position}) % description
             else:
-                response = random.choice(ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES) % position
+                if position == state.position:
+                    response = random.choice(ACKNOWLEDGE_SAME_POSITION_PHRASES).format_map({"position": position}) % "die"
+                else:
+                    response = random.choice(ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES).format_map({"position": position}) % "die"
+            response = response + " Vul dat maar in op de thablet."
             return response
 
     def has_next_round(self, state):
-        return state.round < 3
+        return state.round < 7
 
     def _format_state(self, value):
         if isinstance(value, dict):
