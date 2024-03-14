@@ -138,7 +138,7 @@ class DialogManager:
             action, next_state = self.act(utterance, game_transition, self._state)
             if action.reply:
                 if reply:
-                    reply += " \\pau=value\\" + action.reply
+                    reply += " \\pau=1000\\" + action.reply
                 else:
                     reply = action.reply
             logger.debug("Transition from %s to %s", self._format_state(self._state), self._format_state(next_state))

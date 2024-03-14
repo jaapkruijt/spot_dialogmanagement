@@ -20,7 +20,7 @@ if __name__ == '__main__':
     )
 
     disambiguator = Disambiguator(ak_characters, ak_robot_scene)
-    dialog_manager = DialogManager(disambiguator, max_position=3)
+    dialog_manager = DialogManager(disambiguator, max_position=5)
 
     dialog_manager.set_replier(replier)
 
