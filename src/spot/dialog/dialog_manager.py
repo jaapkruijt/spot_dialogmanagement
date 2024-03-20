@@ -221,7 +221,7 @@ class DialogManager:
     def _act_query_next(self, state):
         # Eventually check the disambiguator state if there is already information available
         # if asking for next position
-        if DisambiguatorStatus.AWAIT_NEXT.name == self._disambiguator.status:
+        if DisambiguatorStatus.AWAIT_NEXT.name == self._disambiguator.status():
             if 1 == state.position:
                 action = Action("Wie staat er bij jou op plek 1?", True)
             else:
@@ -264,7 +264,6 @@ class DialogManager:
             reply = self._acknowledge(state, confirm=False)
             action = Action(reply)
 
-            # TODO solve state.mention = None
             # selected, certainty, position, difference = state.disambiguation_result
             # self._disambiguator.confirm_character_position(selected, state.mention)
             # logging.debug("State mention: %s", state.mention)
@@ -341,6 +340,7 @@ class DialogManager:
         else:
             if self.high_engagement:
                 if position == state.position:
+                    # TODO is state.position already None here?
                     response = random.choice(ACKNOWLEDGE_SAME_POSITION_PHRASES).format_map({"position": position}) % description
                 else:
                     response = random.choice(ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES).format_map({"position": position}) % description
