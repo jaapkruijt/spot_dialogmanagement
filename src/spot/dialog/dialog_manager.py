@@ -175,12 +175,14 @@ class DialogManager:
         else:
             raise ValueError("Invalid conversational state " + str(state.conv_state))
 
-
         # Put selected, certainty, disambiguator status into EMISSOR: mention is whole utterance, annotation a custom value with those data values
         return action, next_state
 
     def act_game_init(self, game_transition, state):
         if game_transition:
+            # TODO use to store disambiguator state
+            participant_id = game_transition.participant_id
+            logger.info("Start game for %s", participant_id)
             action = Action(reply="Hoi!", await_input=False)
             next_state = state.transition(ConvState.GAME_START)
         else:
