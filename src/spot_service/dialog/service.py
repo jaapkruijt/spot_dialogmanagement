@@ -70,12 +70,10 @@ class SpotDialogService:
         if self._mic_topic:
             input_topics += [self._mic_topic]
 
-        buffer_size = 32 if self._mic_topic else 0
-
         self._topic_worker = TopicWorker(input_topics, self._event_bus, provides=[self._output_topic],
                                          intention_topic=self._intention_topic, intentions=self._intentions,
                                          resource_manager=self._resource_manager, processor=self._process,
-                                         buffer_size=buffer_size, name=self.__class__.__name__)
+                                         buffer_size=16, name=self.__class__.__name__)
         self._topic_worker.start().wait()
 
     def stop(self):
