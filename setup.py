@@ -27,6 +27,7 @@ setup(
     extras_require={
         "service": [
             "cltl.combot",
+            "cltl.emissor-data[client]",
             "emissor"
         ]
     },
