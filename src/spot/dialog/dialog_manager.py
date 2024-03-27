@@ -37,6 +37,7 @@ MATCH_PREVIOUS_PHRASES = ['Wacht even, volgens mij hebben we deze al gehad. Wil 
 
 
 class ConvState(Enum):
+    GAME_INIT = auto()
     GAME_START = auto()
     # Training round
     INTRO = auto()
@@ -53,6 +54,7 @@ class ConvState(Enum):
 
     def _allowed(self):
         return {
+            ConvState.GAME_INIT: [ConvState.GAME_INIT, ConvState.GAME_START],
             ConvState.GAME_START: [ConvState.GAME_START, ConvState.INTRO],
             ConvState.INTRO: [ConvState.INTRO, ConvState.ROUND_START],
             ConvState.ROUND_START: [ConvState.QUERY_NEXT],
@@ -61,7 +63,7 @@ class ConvState(Enum):
             ConvState.REPAIR: [ConvState.REPAIR, ConvState.DISAMBIGUATION],
             ConvState.ACKNOWLEDGE: [ConvState.ACKNOWLEDGE, ConvState.QUERY_NEXT, ConvState.ROUND_FINISH],
             ConvState.ROUND_FINISH: [ConvState.ROUND_START, ConvState.GAME_FINISH],
-            ConvState.GAME_FINISH: [ConvState.GAME_FINISH, ConvState.GAME_START]
+            ConvState.GAME_FINISH: [ConvState.GAME_FINISH, ConvState.GAME_INIT]
         }
 
 
@@ -116,7 +118,7 @@ class DialogManager:
         self._positions = max_position
         self.high_engagement = high_engagement
 
-        self._state = State(ConvState.GAME_START)
+        self._state = State(ConvState.GAME_INIT)
         self._round = 0
         self._replier = None
 
@@ -150,7 +152,9 @@ class DialogManager:
         self._state = next_state.transition(self._state.conv_state, utterance=None, mention=None)
 
     def act(self, utterance, game_transition, state):
-        if ConvState.GAME_START == state.conv_state:
+        if ConvState.GAME_INIT == state.conv_state:
+            action, next_state = self.act_game_init(game_transition, state)
+        elif ConvState.GAME_START == state.conv_state:
             action, next_state = self.act_game_start(game_transition, state)
         elif ConvState.INTRO == state.conv_state:
             action, next_state = self._act_intro(game_transition, state)
@@ -173,6 +177,16 @@ class DialogManager:
 
 
         # Put selected, certainty, disambiguator status into EMISSOR: mention is whole utterance, annotation a custom value with those data values
+        return action, next_state
+
+    def act_game_init(self, game_transition, state):
+        if game_transition:
+            action = Action(reply="Hoi!", await_input=False)
+            next_state = state.transition(ConvState.GAME_START)
+        else:
+            action = Action(await_input=True)
+            next_state = state.transition(ConvState.GAME_INIT)
+
         return action, next_state
 
     def act_game_start(self, game_transition, state):
