@@ -88,6 +88,7 @@ class SpotDialogService:
         self._manager.set_replier(self._send_reply)
         if event.metadata.topic == self._game_input_topic:
             self._manager.game_event(event.payload)
+            logger.info("Handled game event %s", event)
         elif event.metadata.topic == self._mic_topic:
             if event.payload.type == AudioSignalStarted.__name__:
                 self._set_ignore_utterances(False)

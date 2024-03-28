@@ -34,6 +34,7 @@ MATCH_PREVIOUS_PHRASES = ['Wacht even, volgens mij hebben we deze al gehad. Wil 
                           'Even kijken hoor, ik dacht dat we deze al hadden gehad. Laten we even een stap terug.  Kan je iets noemen wat specifiek is voor die figuur?'
                           ]
 
+QUESTIONAIRE_ROUNDS = [1, 6]
 
 
 class ConvState(Enum):
@@ -329,7 +330,12 @@ class DialogManager:
         return action, next_state
 
     def _act_round_finished(self, state):
-        action = Action(random.choice(ROUND_FINISH_PHRASES))
+        reply = random.choice(ROUND_FINISH_PHRASES)
+        if state.round in QUESTIONAIRE_ROUNDS:
+            # TODO Add dutch utterances
+            reply += " \\pau=1000\\ On the next page please fill in the questionaire.."
+
+        action = Action(reply)
         next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.GAME_FINISH,
                                       round=state.round + 1)
 
