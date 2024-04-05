@@ -333,7 +333,8 @@ class DialogManager:
         reply = random.choice(ROUND_FINISH_PHRASES)
         if state.round in QUESTIONAIRE_ROUNDS:
             # TODO Add dutch utterances
-            reply += " \\pau=1000\\ On the next page please fill in the questionaire.."
+            # TODO remove random reply for questionnaire phrase
+            reply = "We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het scherm zie je nu onze score voor deze ronde. Voordat we doorgaan naar de volgende ronde, wil ik je eerst vragen de vragenlijst in te vullen. Druk maar op de link op het scherm om naar de vragen te gaan. Ik ben stil terwijl jij de vragen invult. Daarna gaan we weer verder."
 
         action = Action(reply)
         next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.GAME_FINISH,
@@ -344,6 +345,8 @@ class DialogManager:
     def _act_game_finished(self, state):
         next_state = state.transition(ConvState.GAME_FINISH)
         action = Action("Goodbye!", True)
+        self._disambiguator.save_interaction()
+        # TODO finish dialog manager, emissor scenario, save interaction
 
         return action, next_state
 

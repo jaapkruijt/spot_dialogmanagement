@@ -9,9 +9,9 @@ class GameStartStep:
     final: bool = False
 
     STATEMENTS: ClassVar[Tuple[str, ...]] = ("Hoi, mijn naam is Robin. Hoe heet jij?!",
-                                             "Oke, leuk dat je meedoet met dit spelletje! Het gaat over mijn drie vrienden. Ik zal ze aan je voorstellen. \pau=1000\ Zie je daar die thablet, op die standaard naast mij?",
+                                             "Oke, leuk dat je meedoet met dit spelletje! Het gaat over mijn drie vrienden. Ik zal ze aan je voorstellen. \pau=1000\ Zie je daar die theblet, op die standaard naast mij?",
                                              "Als je op de knop op het scherm drukt, dan zie je mijn vrienden. Kijk goed naar hun gezichten. Die moet je een beetje onthouden.",
-                                             "Deze vrienden gaan overal naar toe en maken dan een foto. Soms staan ze ook op de foto met anderen. Wij krijgen allebei deze foto’s te zien. Maar, op mijn foto staan mijn vrienden op een andere volgorde dan op jouw foto. Daar maken we een leuk spel van. Wij gaan elke ronde samen uitzoeken wie waar staat. Is dat oke?",
+                                             "Deze vrienden gaan overal naar toe, en maken dan een footo. Soms staan ze ook op de footo met anderen. Maar, op jouw footo staan mijn vrienden op een andere plek, dan bij mij. Daar maken we een leuk spelletje van. Wij gaan elke ronde samen uitzoeken, wie waar staat, goed?",
                                              "Het werkt als volgt. We gaan de vrienden 1 voor 1 langs. Jij vertelt wie je op elke plek ziet, en ik vertel dan op welke plek die staat in mijn plaatje. Als we goed overleggen, vinden we samen de juiste antwoorden en is onze score hoger! Leuk toch?",
                                              "Laten we dit even oefenen. Druk maar op de knop om door te gaan naar de oefenronde.")
 
