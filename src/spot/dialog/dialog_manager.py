@@ -64,7 +64,7 @@ class ConvState(Enum):
             ConvState.DISAMBIGUATION: [ConvState.DISAMBIGUATION, ConvState.REPAIR, ConvState.ACKNOWLEDGE],
             ConvState.REPAIR: [ConvState.REPAIR, ConvState.DISAMBIGUATION],
             ConvState.ACKNOWLEDGE: [ConvState.ACKNOWLEDGE, ConvState.QUERY_NEXT, ConvState.ROUND_FINISH],
-            ConvState.ROUND_FINISH: [ConvState.ROUND_START, ConvState.GAME_FINISH],
+            ConvState.ROUND_FINISH: [ConvState.ROUND_START, ConvState.ROUND_FINISH, ConvState.GAME_FINISH],
             ConvState.GAME_FINISH: [ConvState.GAME_FINISH, ConvState.GAME_INIT]
         }
 
@@ -120,9 +120,15 @@ class DialogManager:
         self._positions = max_position
         self.high_engagement = high_engagement
 
+        self._participant_id = None
+
         self._state = State(ConvState.GAME_INIT)
         self._round = 0
         self._replier = None
+
+    @property
+    def participant_id(self):
+        return self._participant_id
 
     def set_replier(self, replier):
         self._replier = replier
@@ -148,7 +154,7 @@ class DialogManager:
             logger.debug("Transition from %s to %s", self._format_state(self._state), self._format_state(next_state))
             self._state = next_state
 
-        self._replier(reply)
+        self._replier(reply, self._state)
 
         # TODO Clear utterance and mention and anything else
         self._state = next_state.transition(self._state.conv_state, utterance=None, mention=None)
@@ -182,9 +188,8 @@ class DialogManager:
 
     def act_game_init(self, game_transition, state):
         if game_transition:
-            # TODO use to store disambiguator state
-            participant_id = game_transition.participant_id
-            logger.info("Start game for %s", participant_id)
+            self._participant_id = game_transition.participant_id
+            logger.info("Start game for %s", self._participant_id)
             action = Action(reply="Hoi!", await_input=False)
             next_state = state.transition(ConvState.GAME_START)
         else:
@@ -331,15 +336,14 @@ class DialogManager:
         return action, next_state
 
     def _act_round_finished(self, game_transition, state):
-        if state.round not in QUESTIONAIRE_ROUNDS:
-            reply = random.choice(ROUND_FINISH_PHRASES)
-            action = Action(reply, await_input=self.has_next_round(state))
-            next_state = state.transition(state if self.has_next_round(state) else ConvState.GAME_FINISH,
-                                          round=state.round + 1)
-        elif game_transition:
+        if game_transition:
             action = Action()
             next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.GAME_FINISH,
                                           round=state.round + 1)
+        elif state.round not in QUESTIONAIRE_ROUNDS:
+            reply = random.choice(ROUND_FINISH_PHRASES)
+            action = Action(reply, await_input=self.has_next_round(state))
+            next_state = state.transition(state.conv_state if self.has_next_round(state) else ConvState.GAME_FINISH)
         else:
             reply = random.choice(QUESTIONAIRE_PHRASES)
             action = Action(reply, await_input=True)
