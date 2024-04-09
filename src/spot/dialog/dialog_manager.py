@@ -359,7 +359,8 @@ class DialogManager:
         return action, state
 
     def save_interaction(self):
-        self._disambiguator.save_interaction()
+        # TODO
+        self._disambiguator.save_interaction(self._participant_id, 1)
         # self._preferences.save
         # Save scenario
 
