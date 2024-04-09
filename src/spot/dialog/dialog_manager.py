@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 NO_MATCH_PHRASES = ['Ik begrijp niet zo goed wie je bedoelt. Kan je het nog een keer omschrijven?',
                     'Ik snap niet zo goed wat je zei. Kan je het iets anders formuleren?']
 # ACKNOWLEDGE_PHRASES = ['Oh, die staat bij mij op plek %s']
+QUESTIONAIRE_PHRASES=["We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het scherm zie je nu onze score voor deze ronde. Voordat we doorgaan naar de volgende ronde, wil ik je eerst vragen de vragenlijst in te vullen. Druk maar op de link op het scherm om naar de vragen te gaan. Ik ben stil terwijl jij de vragen invult. Daarna gaan we weer verder."]
 ROUND_FINISH_PHRASES = [
 'We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het scherm zie je nu onze score voor deze ronde. We kunnen nu door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
     'Dit was het voor deze ronde. Druk maar op de knop Ga Door. Op het scherm zie je nu onze score voor deze ronde. Laten we naar de volgende ronde gaan. Druk maar weer op de knop Ga Door.',
@@ -170,7 +171,7 @@ class DialogManager:
         elif ConvState.REPAIR == state.conv_state:
             action, next_state = self._act_repair(state)
         elif ConvState.ROUND_FINISH == state.conv_state:
-            action, next_state = self._act_round_finished(state)
+            action, next_state = self._act_round_finished(game_transition, state)
         elif ConvState.GAME_FINISH == state.conv_state:
             action, next_state = self._act_game_finished(state)
         else:
@@ -329,26 +330,34 @@ class DialogManager:
 
         return action, next_state
 
-    def _act_round_finished(self, state):
-        reply = random.choice(ROUND_FINISH_PHRASES)
-        if state.round in QUESTIONAIRE_ROUNDS:
-            # TODO Add dutch utterances
-            # TODO remove random reply for questionnaire phrase
-            reply = "We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het scherm zie je nu onze score voor deze ronde. Voordat we doorgaan naar de volgende ronde, wil ik je eerst vragen de vragenlijst in te vullen. Druk maar op de link op het scherm om naar de vragen te gaan. Ik ben stil terwijl jij de vragen invult. Daarna gaan we weer verder."
-
-        action = Action(reply)
-        next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.GAME_FINISH,
-                                      round=state.round + 1)
+    def _act_round_finished(self, game_transition, state):
+        if state.round not in QUESTIONAIRE_ROUNDS:
+            reply = random.choice(ROUND_FINISH_PHRASES)
+            action = Action(reply, await_input=self.has_next_round(state))
+            next_state = state.transition(state if self.has_next_round(state) else ConvState.GAME_FINISH,
+                                          round=state.round + 1)
+        elif game_transition:
+            action = Action()
+            next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.GAME_FINISH,
+                                          round=state.round + 1)
+        else:
+            reply = random.choice(QUESTIONAIRE_PHRASES)
+            action = Action(reply, await_input=True)
+            next_state = state
 
         return action, next_state
 
     def _act_game_finished(self, state):
-        next_state = state.transition(ConvState.GAME_FINISH)
         action = Action("Goodbye!", True)
-        self._disambiguator.save_interaction()
-        # TODO finish dialog manager, emissor scenario, save interaction
 
-        return action, next_state
+        self.save_interaction()
+
+        return action, state
+
+    def save_interaction(self):
+        self._disambiguator.save_interaction()
+        # self._preferences.save
+        # Save scenario
 
     def get_mention(self, utterance):
         # Eventually add mention detection
