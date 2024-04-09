@@ -30,6 +30,5 @@ setup(
             "cltl.emissor-data[client]",
             "emissor"
         ]
-    },
-    setup_requires=['flake8']
+    }
 )
