@@ -17,6 +17,7 @@ class GameEvent:
     interaction: Optional[str] = "1"
     round: Optional[str] = None
     state: Optional[str] = None
+    input: Optional[str] = None
 
 
 @emissor_dataclass

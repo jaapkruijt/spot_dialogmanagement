@@ -11,7 +11,7 @@ from cltl.combot.infra.topic_worker import TopicWorker
 from cltl_service.emissordata.client import EmissorDataClient
 from emissor.representation.scenario import TextSignal, Modality, class_type
 
-from spot.dialog.dialog_manager import DialogManager, State, ConvState
+from spot.dialog.dialog_manager import DialogManager, State, ConvState, Input
 from spot_service.dialog.api import GameSignal, GameEvent
 
 logger = logging.getLogger(__name__)
@@ -90,21 +90,25 @@ class SpotDialogService:
         self._topic_worker = None
 
     def _process(self, event: Event[Union[TextSignalEvent, AudioSignalStarted, SignalEvent[GameEvent]]]):
-        self._manager.set_replier(self._send_reply)
         if event.metadata.topic == self._game_input_topic:
-            self._manager.game_event(event.payload.signal.value)
+            response, state, input = self._manager.game_event(event.payload.signal.value)
+            self._send_reply(response, state, input)
             logger.info("Handled game event %s", event.payload.signal.value)
         elif event.metadata.topic == self._mic_topic:
             if event.payload.type == AudioSignalStarted.__name__:
                 self._set_ignore_utterances(False)
+        elif event.metadata.topic == self._text_input_topic and not event.payload.signal.text:
+            # Ignore empty inputs
+            pass
         elif event.metadata.topic == self._text_input_topic and not self._ignore_utterances:
             # Ignore events until utterance is handled
             self._set_ignore_utterances()
-            self._manager.utterance(event.payload.signal.text)
+            response, state, input = self._manager.utterance(event.payload.signal.text)
+            self._send_reply(response, state, input)
         else:
             logger.info("Ignored event %s (ignore utterances: %s)", event, self._ignore_utterances)
 
-    def _send_reply(self, response: str, state: State):
+    def _send_reply(self, response: str, state: State, input: Input):
         if not response:
             return
 
@@ -113,7 +117,8 @@ class SpotDialogService:
         signal_event = TextSignalEvent.for_agent(signal)
         self._event_bus.publish(self._output_topic, Event.for_payload(signal_event))
 
-        event = GameEvent(participant_id=self._manager._participant_id, round=str(state.round), state=state.conv_state.name)
+        event = GameEvent(participant_id=self._manager._participant_id, round=str(state.round),
+                          state=state.conv_state.name, input=input.name)
         game_signal = GameSignal.for_scenario(scenario_id, timestamp_now(), event)
         game_signal_event = SignalEvent(class_type(GameSignal), Modality.VIDEO, game_signal)
         self._event_bus.publish(self._game_state_topic, Event.for_payload(game_signal_event))

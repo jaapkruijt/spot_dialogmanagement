@@ -1,4 +1,5 @@
 import dataclasses
+import enum
 import json
 import logging
 import os
@@ -112,41 +113,43 @@ class State:
 
 
 @dataclasses.dataclass
+class Input(enum.Enum):
+    GAME = auto()
+    REPLY = auto()
+
+
+@dataclasses.dataclass
 class Action:
     reply: Optional[str] = None
-    await_input: Optional[bool] = None
+    await_input: Optional[Input] = None
 
 
 class DialogManager:
-    def __init__(self, disambiguator, storage_path: str, rounds=6, max_position=5, questionaiers=[1, 6], success_threshold=0.3, high_engagement=True):
+    def __init__(self, disambiguator, storage_path: str, rounds=6, max_position=5, questionnaires=[1, 6], success_threshold=0.3, high_engagement=True):
         self._disambiguator = disambiguator
         self._storage_path = storage_path
         self._success_threshold = success_threshold
         self._positions = max_position
         self._rounds = rounds
-        self._questionaire_rounds = questionaiers
+        self._questionaire_rounds = questionnaires
         self.high_engagement = high_engagement
 
         self._participant_id = None
 
         self._state = State(ConvState.GAME_INIT)
         self._round = 0
-        self._replier = None
 
     @property
     def participant_id(self):
         return self._participant_id
 
-    def set_replier(self, replier):
-        self._replier = replier
-
     def game_event(self, event):
         logger.debug("Input (Game): %s", event)
-        self.run(None, event)
+        return self.run(None, event)
 
     def utterance(self, utterance: str):
         logger.debug("Input: (Text) %s", utterance)
-        self.run(utterance, None)
+        return self.run(utterance, None)
 
     def run(self, utterance, game_transition):
         action = Action()
@@ -161,10 +164,10 @@ class DialogManager:
             logger.debug("Transition from %s to %s", self._format_state(self._state), self._format_state(next_state))
             self._state = next_state
 
-        self._replier(reply, self._state)
-
         # TODO Clear utterance and mention and anything else
         self._state = next_state.transition(self._state.conv_state, utterance=None, mention=None)
+
+        return reply, self._state, action.await_input
 
     def act(self, utterance, game_transition, state):
         if ConvState.GAME_INIT == state.conv_state:
@@ -199,10 +202,10 @@ class DialogManager:
         if game_transition:
             self._participant_id = game_transition.participant_id
             logger.info("Start game for %s", self._participant_id)
-            action = Action(reply="Hoi!", await_input=False)
+            action = Action()
             next_state = state.transition(ConvState.GAME_START)
         else:
-            action = Action(await_input=True)
+            action = Action(await_input=Input.GAME)
             next_state = state.transition(ConvState.GAME_INIT)
 
         return action, next_state
@@ -214,12 +217,12 @@ class DialogManager:
         elif not state.game_start.final:
             step = state.game_start.next()
             next_state = state.transition(ConvState.GAME_START, game_start=step)
-            action = Action(step.statement, True)
+            action = Action(step.statement, await_input=Input.REPLY if not next_state.game_start.final else Input.GAME)
         elif game_transition:
             action = Action()
             next_state = state.transition(ConvState.INTRO, game_start=None)
         else:
-            action = Action(None, True)
+            action = Action(await_input=Input.REPLY)
             next_state = state
         return action, next_state
 
@@ -230,12 +233,12 @@ class DialogManager:
         elif not state.intro.final:
             step = state.intro.next()
             next_state = state.transition(ConvState.INTRO, intro=step)
-            action = Action(step.statement, True)
+            action = Action(step.statement, await_input=Input.REPLY if not next_state.intro.final else Input.GAME)
         elif game_transition:
             action = Action()
             next_state = state.transition(ConvState.ROUND_START, intro=None, round=0)
         else:
-            action = Action(None, True)
+            action = Action(await_input=Input.REPLY)
             next_state = state
 
         return action, next_state
@@ -255,12 +258,12 @@ class DialogManager:
         # if asking for next position
         if DisambiguatorStatus.AWAIT_NEXT.name == self._disambiguator.status():
             if 1 == state.position:
-                action = Action("Wie staat er bij jou op plek 1?", True)
+                action = Action("Wie staat er bij jou op plek 1?", await_input=Input.REPLY)
             else:
-                action = Action(random.choice(QUERY_NEXT_PHRASES), True)
+                action = Action(random.choice(QUERY_NEXT_PHRASES), Input.REPLY)
         # if coming from repair
         else:
-            action = Action("Wie staat er bij jou op plek " + str(state.position) + "?", True)
+            action = Action("Wie staat er bij jou op plek " + str(state.position) + "?", Input.REPLY)
         next_state = state.transition(ConvState.DISAMBIGUATION)
 
         return action, next_state
@@ -286,7 +289,7 @@ class DialogManager:
                 action = Action()
                 next_state = state.transition(ConvState.REPAIR, disambiguation_result=disambiguation_result)
         else:
-            action = Action(None, True)
+            action = Action(await_input=Input.REPLY)
             next_state = state
 
         return action, next_state
@@ -308,7 +311,7 @@ class DialogManager:
                 position=position, utterance=None, mention=None, disambiguation_result=None, confirmation=None)
         elif ConfirmationState.CONFIRM == state.confirmation:
             reply = self._acknowledge(state, confirm=True)
-            action = Action(reply, True)
+            action = Action(reply, await_input=Input.REPLY)
             next_state = state.transition(state.conv_state, confirmation=ConfirmationState.REQUESTED)
         elif ConfirmationState.REQUESTED == state.confirmation:
             if "ja" in utterance.lower():
@@ -319,7 +322,7 @@ class DialogManager:
                 # Restart, but stay in the same position
                 next_state = state.transition(ConvState.QUERY_NEXT, utterance=None, mention=None, disambiguation_result=None, confirmation=None)
             else:
-                action = Action("Ik snap het niet, ja of nee?", True)
+                action = Action("Ik snap het niet, ja of nee?", await_input=Input.REPLY)
                 next_state = state
         else:
             raise ValueError("Invalid confirmation status " + str(state.confirmation))
@@ -328,15 +331,15 @@ class DialogManager:
 
     def _act_repair(self, state):
         if DisambiguatorStatus.NO_MATCH.name == self._disambiguator.status():
-            action = Action(random.choice(NO_MATCH_PHRASES), True)
+            action = Action(random.choice(NO_MATCH_PHRASES), await_input=Input.REPLY)
         elif DisambiguatorStatus.NEG_RESPONSE.name == self._disambiguator.status():
             # TODO not sure if this is way to go
-            action = Action("Oke, kun je het op een andere manier omschrijven?", True)
+            action = Action("Oke, kun je het op een andere manier omschrijven?", await_input=Input.REPLY)
         elif DisambiguatorStatus.MATCH_PREVIOUS.name == self._disambiguator.status():
-            action = Action(random.choice(MATCH_PREVIOUS_PHRASES), True)
+            action = Action(random.choice(MATCH_PREVIOUS_PHRASES), await_input=Input.REPLY)
         elif DisambiguatorStatus.MATCH_MULTIPLE.name == self._disambiguator.status():
             description = state.disambiguation_result[3]
-            action = Action(f"{description}?", True)
+            action = Action(f"{description}?", await_input=Input.REPLY)
         else:
             raise ValueError(f"Illegal state for disambiguator status: {self._disambiguator.status()}")
 
@@ -350,11 +353,11 @@ class DialogManager:
             next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.OUTRO)
         elif state.round not in self._questionaire_rounds:
             reply = random.choice(ROUND_FINISH_PHRASES)
-            action = Action(reply, await_input=self.has_next_round(state))
+            action = Action(reply, await_input=Input.GAME if self.has_next_round(state) else None)
             next_state = state.transition(state.conv_state if self.has_next_round(state) else ConvState.OUTRO)
         else:
             reply = random.choice(QUESTIONAIRE_PHRASES)
-            action = Action(reply, await_input=True)
+            action = Action(reply, await_input=Input.GAME)
             next_state = state
 
         return action, next_state
@@ -369,19 +372,19 @@ class DialogManager:
                 return Action(), state.transition(ConvState.OUTRO, utterance=utterance)
             else:
                 # No response, wait..
-                return Action(await_input=True), state
+                return Action(await_input=Input.REPLY), state
         elif state.outro.final:
             action = Action()
             next_state = state.transition(ConvState.GAME_FINISH, outro=None, utterance=None)
         else:
             step = state.outro.next()
             next_state = state.transition(ConvState.OUTRO, outro=step, utterance=None)
-            action = Action(step.statement, not state.outro.final)
+            action = Action(step.statement, await_input=Input.REPLY if not state.outro.final else None)
 
         return action, next_state
 
     def _act_game_finished(self, state):
-        action = Action("Goodbye!", True)
+        action = Action("Goodbye!", await_input=Input.GAME)
 
         self.save_interaction()
 
