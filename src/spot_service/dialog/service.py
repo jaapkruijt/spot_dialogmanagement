@@ -2,6 +2,7 @@ import logging
 from typing import List, Union
 
 from cltl.combot.event.emissor import TextSignalEvent, AudioSignalStarted, SignalEvent
+from cltl.combot.event.bdi import DesireEvent
 from cltl.combot.infra.config import ConfigurationManager
 from cltl.combot.infra.event import Event, EventBus
 from cltl.combot.infra.resource import ResourceManager
@@ -10,7 +11,7 @@ from cltl.combot.infra.topic_worker import TopicWorker
 from cltl_service.emissordata.client import EmissorDataClient
 from emissor.representation.scenario import TextSignal, Modality, class_type
 
-from spot.dialog.dialog_manager import DialogManager, State
+from spot.dialog.dialog_manager import DialogManager, State, ConvState
 from spot_service.dialog.api import GameSignal, GameEvent
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,9 @@ class SpotDialogService:
         game_signal = GameSignal.for_scenario(scenario_id, timestamp_now(), event)
         game_signal_event = SignalEvent(class_type(GameSignal), Modality.VIDEO, game_signal)
         self._event_bus.publish(self._game_state_topic, Event.for_payload(game_signal_event))
+
+        if ConvState.GAME_FINISH == state.conv_state:
+            self._event_bus.publish(self._desire_topic, Event.for_payload(DesireEvent(['quit'])))
 
     def _set_ignore_utterances(self, ignore=True):
         if self._ignore_utterances is None:

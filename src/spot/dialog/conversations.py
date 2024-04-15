@@ -42,6 +42,23 @@ class IntroStep:
         return IntroStep(step, statement, step == len(self.STATEMENTS) - 1)
 
 
+@dataclasses.dataclass(frozen=True)
+class OutroStep:
+    step: int = -1
+    statement: Optional[str] = None
+    store_input: bool = False
+    final: bool = False
+
+    STATEMENTS: ClassVar[Tuple[str, ...]] = (("Dankjewel voor het invullen van de vragenlijst! Ik ben nog benieuwd naar iets: wat is eigenlijk jouw lievelings vakantiebestemming? Ga je liever naar de bergen? naar een stad? of naar het strand.", True),
+                                             ("Leuk om te horen. Dat ga ik onthouden. Tot volgende week.", False))
+
+    def next(self):
+        step = min(self.step + 1, len(self.STATEMENTS) - 1)
+        statement, store_input = self.STATEMENTS[step]
+
+        return OutroStep(step, statement, store_input, step == len(self.STATEMENTS) - 1)
+
+
 if __name__ == '__main__':
     intro = IntroStep()
     for _ in range(5):

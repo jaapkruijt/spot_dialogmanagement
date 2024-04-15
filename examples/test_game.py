@@ -1,7 +1,8 @@
 import random
 
 from spot.dialog.dialog_manager import DisambiguatorStatus, DialogManager
-from spot.dialog.intro import GameStartStep
+from spot.dialog.conversations import GameStartStep
+from spot_service.dialog.api import GameEvent
 
 
 class TestDisambiguator:
@@ -35,12 +36,12 @@ class TestDisambiguator:
         raise  ValueError()
 
 
-dialog_manager = DialogManager(TestDisambiguator(), max_position=3)
+dialog_manager = DialogManager(TestDisambiguator(), storage_path=None, max_position=3)
 
 reply = {"value": None, "position": 0}
-def replier(reply_str):
+def replier(reply_str, state):
     reply["value"] = reply_str
-    print("Output:", reply_str)
+    print("Output:", reply_str, "state:", state)
 
 
 dialog_manager.set_replier(replier)
@@ -49,13 +50,13 @@ for i in GameStartStep.STATEMENTS:
     print("Input:", "bla")
     dialog_manager.utterance(random.choice([None, "bla"]))
 print("Input (Gane): submit")
-dialog_manager.game_event("test")
+dialog_manager.game_event(GameEvent(participant_id="1"))
 
 for i in GameStartStep.STATEMENTS:
     print("Input:", "bla")
     dialog_manager.utterance(random.choice([None, "bla"]))
 print("Input (Gane): submit")
-dialog_manager.game_event("test")
+dialog_manager.game_event(GameEvent(participant_id="1"))
 
 position = 1
 # TODO advance position, parse in test disambiguator

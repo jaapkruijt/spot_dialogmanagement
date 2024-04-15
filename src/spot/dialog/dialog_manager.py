@@ -1,12 +1,15 @@
 import dataclasses
+import json
 import logging
-from enum import Enum, auto
-from typing import Optional, Any
+import os
 import random
+from enum import Enum, auto
+from pathlib import Path
+from typing import Optional, Any
 
 from spot.pragmatic_model.model_ambiguity import DisambiguatorStatus
 
-from spot.dialog.intro import IntroStep, GameStartStep
+from spot.dialog.conversations import IntroStep, GameStartStep, OutroStep
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +38,6 @@ MATCH_PREVIOUS_PHRASES = ['Wacht even, volgens mij hebben we deze al gehad. Wil 
                           'Even kijken hoor, ik dacht dat we deze al hadden gehad. Laten we even een stap terug.  Kan je iets noemen wat specifiek is voor die figuur?'
                           ]
 
-QUESTIONAIRE_ROUNDS = [1, 6]
-
 
 class ConvState(Enum):
     GAME_INIT = auto()
@@ -49,6 +50,7 @@ class ConvState(Enum):
     REPAIR = auto()
     ACKNOWLEDGE = auto()
     ROUND_FINISH = auto()
+    OUTRO = auto()
     GAME_FINISH = auto()
 
     def transitions(self):
@@ -64,7 +66,8 @@ class ConvState(Enum):
             ConvState.DISAMBIGUATION: [ConvState.DISAMBIGUATION, ConvState.REPAIR, ConvState.ACKNOWLEDGE],
             ConvState.REPAIR: [ConvState.REPAIR, ConvState.DISAMBIGUATION],
             ConvState.ACKNOWLEDGE: [ConvState.ACKNOWLEDGE, ConvState.QUERY_NEXT, ConvState.ROUND_FINISH],
-            ConvState.ROUND_FINISH: [ConvState.ROUND_START, ConvState.ROUND_FINISH, ConvState.GAME_FINISH],
+            ConvState.ROUND_FINISH: [ConvState.ROUND_START, ConvState.ROUND_FINISH, ConvState.OUTRO],
+            ConvState.OUTRO: [ConvState.OUTRO, ConvState.GAME_FINISH],
             ConvState.GAME_FINISH: [ConvState.GAME_FINISH, ConvState.GAME_INIT]
         }
 
@@ -80,6 +83,7 @@ class State:
     conv_state: Optional[ConvState] = None
     game_start: Optional[GameStartStep] = None
     intro: Optional[IntroStep] = None
+    outro: Optional[OutroStep] = None
     round: int = 0
     position: int = 0
     utterance: Optional[str] = None
@@ -114,10 +118,13 @@ class Action:
 
 
 class DialogManager:
-    def __init__(self, disambiguator, max_position=5, success_threshold=0.3, high_engagement=True):
+    def __init__(self, disambiguator, storage_path: str, rounds=6, max_position=5, questionaiers=[1, 6], success_threshold=0.3, high_engagement=True):
         self._disambiguator = disambiguator
+        self._storage_path = storage_path
         self._success_threshold = success_threshold
         self._positions = max_position
+        self._rounds = rounds
+        self._questionaire_rounds = questionaiers
         self.high_engagement = high_engagement
 
         self._participant_id = None
@@ -178,6 +185,8 @@ class DialogManager:
             action, next_state = self._act_repair(state)
         elif ConvState.ROUND_FINISH == state.conv_state:
             action, next_state = self._act_round_finished(game_transition, state)
+        elif ConvState.OUTRO == state.conv_state:
+            action, next_state = self._act_outro(utterance, state)
         elif ConvState.GAME_FINISH == state.conv_state:
             action, next_state = self._act_game_finished(state)
         else:
@@ -338,16 +347,36 @@ class DialogManager:
     def _act_round_finished(self, game_transition, state):
         if game_transition:
             action = Action()
-            next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.GAME_FINISH,
-                                          round=state.round + 1)
-        elif state.round not in QUESTIONAIRE_ROUNDS:
+            next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.OUTRO)
+        elif state.round not in self._questionaire_rounds:
             reply = random.choice(ROUND_FINISH_PHRASES)
             action = Action(reply, await_input=self.has_next_round(state))
-            next_state = state.transition(state.conv_state if self.has_next_round(state) else ConvState.GAME_FINISH)
+            next_state = state.transition(state.conv_state if self.has_next_round(state) else ConvState.OUTRO)
         else:
             reply = random.choice(QUESTIONAIRE_PHRASES)
             action = Action(reply, await_input=True)
             next_state = state
+
+        return action, next_state
+
+    def _act_outro(self, utterance, state):
+        if state.outro is None:
+            action = Action()
+            next_state = state.transition(ConvState.OUTRO, outro=OutroStep())
+        elif state.outro.store_input and not state.utterance:
+            if utterance:
+                self.save_preferences(utterance)
+                return Action(), state.transition(ConvState.OUTRO, utterance=utterance)
+            else:
+                # No response, wait..
+                return Action(await_input=True), state
+        elif state.outro.final:
+            action = Action()
+            next_state = state.transition(ConvState.GAME_FINISH, outro=None, utterance=None)
+        else:
+            step = state.outro.next()
+            next_state = state.transition(ConvState.OUTRO, outro=step, utterance=None)
+            action = Action(step.statement, not state.outro.final)
 
         return action, next_state
 
@@ -358,11 +387,27 @@ class DialogManager:
 
         return action, state
 
+    def save_preferences(self, utterance):
+        if not self._storage_path:
+            return
+
+        storage_dir = os.path.join(self._storage_path, "dialog")
+        Path(storage_dir).mkdir(parents=True, exist_ok=True)
+        data_path = os.path.join(storage_dir, f"pp_{self._participant_id}_int{1}_preferences.json")
+
+        try:
+            with open(data_path, 'r') as data_file:
+                data = json.load(data_file)
+        except:
+            data = {}
+
+        data["answer"] = utterance
+
+        with open(data_path, 'w') as data_file:
+            json.dump(data, data_file)
+
     def save_interaction(self):
-        # TODO
-        self._disambiguator.save_interaction(self._participant_id, 1)
-        # self._preferences.save
-        # Save scenario
+        self._disambiguator.save_interaction(self._storage_path, self._participant_id, 1)
 
     def get_mention(self, utterance):
         # Eventually add mention detection
@@ -392,7 +437,7 @@ class DialogManager:
             return response
 
     def has_next_round(self, state):
-        return state.round < 7
+        return state.round < self._rounds
 
     def _format_state(self, value):
         if isinstance(value, dict):
