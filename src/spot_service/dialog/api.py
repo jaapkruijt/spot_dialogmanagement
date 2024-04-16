@@ -14,6 +14,7 @@ from typing import Optional
 @dataclasses.dataclass
 class GameEvent:
     participant_id: Optional[str] = None
+    participant_name: Optional[str] = None
     interaction: Optional[str] = "1"
     round: Optional[str] = None
     state: Optional[str] = None
