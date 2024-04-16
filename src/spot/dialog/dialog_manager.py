@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import random
+import re
 from enum import Enum, auto
 from pathlib import Path
 from typing import Optional, Any
@@ -404,7 +405,10 @@ class DialogManager:
         except:
             data = {}
 
+        preferences = {p.lower() for p in re.findall(r'([Bb]ergen|[Ss]tad|[Ss]trand)', utterance)}
+        preference = next(iter(preferences)) if len(preferences) == 1 else ""
         data["answer"] = utterance
+        data["preference"] = preference
 
         with open(data_path, 'w') as data_file:
             json.dump(data, data_file)
@@ -454,4 +458,3 @@ class DialogManager:
             return result
         else:
             return value
-
