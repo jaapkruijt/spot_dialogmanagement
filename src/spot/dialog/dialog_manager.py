@@ -17,13 +17,13 @@ logger = logging.getLogger(__name__)
 
 # TODO is it possible to add string formatting to some phrases and not others?
 NO_MATCH_PHRASES = ['Ik begrijp niet zo goed wie je bedoelt. Kan je het nog een keer omschrijven?',
-                    'Ik snap niet zo goed wat je zei. Kan je het iets \vct=85\ anders \vct=100\ formuleren?']
+                    'Ik snap niet zo goed wat je zei. Kan je het iets \\vct=85\\ anders \\vct=100\\ formuleren?']
 # ACKNOWLEDGE_PHRASES = ['Oh, die staat bij mij op plek %s']
 QUESTIONAIRE_PHRASES=["We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het scherm zie je nu onze score voor deze ronde. Voordat we doorgaan naar de volgende ronde, wil ik je eerst vragen de vragenlijst in te vullen. Druk maar op de link op het scherm om naar de vragen te gaan. Ik ben stil terwijl jij de vragen invult. Daarna gaan we weer verder."]
 ROUND_FINISH_PHRASES = [
-'We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het \pau=5\ scherm zie je nu onze score \pau=5\ voor \vct=102\ deze \vct=100\ ronde. We kunnen nu door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
-    'Dit was het voor \vct=102\deze \vct=100\ ronde. Druk maar op de knop Ga Door. Op het \pau=5\ scherm zie je nu onze score voor \vct=102\ deze \vct=100\ ronde. Laten we naar de volgende ronde gaan. Druk maar weer op de knop Ga Door.',
-    'Oke. Druk maar op de knop Ga Door. Onze score voor \vct=101\ deze \vct=100\ ronde verschijnt nu in beeld. We gaan door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
+'We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het \pau=5\ scherm zie je nu onze score \pau=5\ voor \\vct=102\\ deze \\vct=100\\ ronde. We kunnen nu door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
+    'Dit was het voor \\vct=102\\deze \\vct=100\ ronde. Druk maar op de knop Ga Door. Op het \pau=5\ scherm zie je nu onze score voor \\vct=102\\ deze \\vct=100\\ ronde. Laten we naar de volgende ronde gaan. Druk maar weer op de knop Ga Door.',
+    'Oke. Druk maar op de knop Ga Door. Onze score voor \\vct=101\\ deze \\vct=100\\ ronde verschijnt nu in beeld. We gaan door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
     'Oke, we hebben ze allemaal gehad. Druk maar op de knop Ga Door. Dit is onze score. Laten we doorgaan naar de volgende ronde. Druk maar weer op de knop Ga Door.',
     '\pau=10\ Deze ronde is klaar. Druk maar op de knop Ga Door. Onze score komt nu in beeld. Druk op de knop Ga Door om naar de volgende ronde te gaan.'
 ]
@@ -36,7 +36,7 @@ ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES = ['Bij mij staat %s op plek {position}.'
                                           '%s staat bij mij ergens anders, namelijk op plek {position}.',
                                           'Oh, %s staat bij mij op plek {position}.',
                                           'Even kijken, nee, bij mij staat %s op plek {position}.']
-MATCH_PREVIOUS_PHRASES = ['Wacht even, volgens mij hebben we deze al gehad. Wil je het \vct=110\ nog \vct=100\ een keer omschrijven?',
+MATCH_PREVIOUS_PHRASES = ['Wacht even, volgens mij hebben we deze al gehad. Wil je het \\vct=110\ nog \\vct=100\ een keer omschrijven?',
                           'Even kijken hoor, ik dacht dat we deze al hadden gehad. Laten we even een stap terug.  Kan je iets noemen wat specifiek is voor die figuur?'
                           ]
 
