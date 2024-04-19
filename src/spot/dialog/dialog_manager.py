@@ -54,6 +54,7 @@ class ConvState(Enum):
     ROUND_FINISH = auto()
     OUTRO = auto()
     GAME_FINISH = auto()
+    QUESTIONNAIRE = auto()
 
     def transitions(self):
         return self._allowed()[self]
@@ -68,9 +69,10 @@ class ConvState(Enum):
             ConvState.DISAMBIGUATION: [ConvState.DISAMBIGUATION, ConvState.REPAIR, ConvState.ACKNOWLEDGE],
             ConvState.REPAIR: [ConvState.REPAIR, ConvState.DISAMBIGUATION],
             ConvState.ACKNOWLEDGE: [ConvState.ACKNOWLEDGE, ConvState.QUERY_NEXT, ConvState.ROUND_FINISH],
-            ConvState.ROUND_FINISH: [ConvState.ROUND_START, ConvState.ROUND_FINISH, ConvState.OUTRO],
+            ConvState.ROUND_FINISH: [ConvState.QUESTIONNAIRE, ConvState.ROUND_START, ConvState.ROUND_FINISH, ConvState.OUTRO],
             ConvState.OUTRO: [ConvState.OUTRO, ConvState.GAME_FINISH],
-            ConvState.GAME_FINISH: [ConvState.GAME_FINISH, ConvState.GAME_INIT]
+            ConvState.GAME_FINISH: [ConvState.GAME_FINISH, ConvState.GAME_INIT],
+            ConvState.QUESTIONNAIRE: [ConvState.QUESTIONNAIRE, ConvState.ROUND_START, ConvState.ROUND_FINISH, ConvState.OUTRO]
         }
 
 
@@ -187,7 +189,7 @@ class DialogManager:
             action, next_state = self._act_acknowledge(utterance, state)
         elif ConvState.REPAIR == state.conv_state:
             action, next_state = self._act_repair(state)
-        elif ConvState.ROUND_FINISH == state.conv_state:
+        elif ConvState.ROUND_FINISH == state.conv_state or ConvState.QUESTIONNAIRE == state.conv_state:
             action, next_state = self._act_round_finished(game_transition, state)
         elif ConvState.OUTRO == state.conv_state:
             action, next_state = self._act_outro(utterance, state)
@@ -352,15 +354,19 @@ class DialogManager:
         if game_transition:
             action = Action()
             next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.OUTRO)
-        elif state.round not in self._questionaire_rounds:
+        elif state.round not in self._questionaire_rounds and state.conv_state != ConvState.QUESTIONNAIRE:
             reply = random.choice(ROUND_FINISH_PHRASES)
             action = Action(reply, await_input=Input.GAME if self.has_next_round(state) else None)
-            next_state = state.transition(state.conv_state if self.has_next_round(state) else ConvState.OUTRO)
-        else:
-            # reply = "We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het scherm zie je nu onze score voor deze ronde. Voordat we doorgaan naar de volgende ronde, wil ik je vragen om eerst een paar vragen te beantwoorden. Ik ga stil zijn \pau=50\ terwijl jij de vragen beantwoord. Tik op het \pau=5\ \vct=95\scherm \pau=5\ \vct=100\ op \pau=35\ vragenlijst, om door te gaan naar de vragen."
-            # reply = "We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Goed gedaan! Op het \pau=5\ scherm zie je nu onze eindscore. Mooie score hoor! Het spel is nu afgelopen. Maar \pau=70\ ik wil je nog wel vragen om wat vragen te beantwoorden. Ik ga stil zijn \pau=50\ terwijl jij de vragen beantwoord. Hierna zijn we klaar voor vandaag. Tik op het \pau=5\ \vct=95\scherm op \pau=35\ vragenlijst, om naar de vragen te gaan."
-            reply = random.choice(QUESTIONAIRE_PHRASES)
+            next_state = state.transition(ConvState.QUESTIONNAIRE if self.has_next_round(state) else ConvState.OUTRO)
+        elif state.conv_state == ConvState.ROUND_FINISH:
+            if state.round == 1:
+                reply = 'We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het \pau=5\ scherm zie je nu onze score \pau=5\ voor \\vct=102\\ deze \\vct=100\\ ronde. Voordat we doorgaan naar de volgende ronde, wil ik je vragen om eerst een paar vragen te beantwoorden. Ik ga stil zijn \pau=50\ terwijl jij de vragen beantwoord. Tik op het \pau=5\ \\vct=95\ scherm \pau=5\ \\vct=100\ op de knop, om door te gaan naar de vragen. Na de vragen gaan we weer door met het spel.'
+            else:
+                reply = 'We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Goed gedaan! Op het \pau=5\ scherm zie je nu onze eindscore. Mooie score hoor! Het spel is nu afgelopen. Maar \pau=70\ ik wil je nog wel vragen om wat vragen te beantwoorden. Ik ga stil zijn \pau=50\ terwijl jij de vragen beantwoord. Hierna zijn we klaar voor vandaag. Tik op het \pau=5\ \\vct=95\scherm op de knop, om naar de vragen te gaan.'
             action = Action(reply, await_input=Input.GAME)
+            next_state = state.transition(ConvState.QUESTIONNAIRE)
+        else:
+            action = Action(await_input=Input.GAME)
             next_state = state
 
         return action, next_state
