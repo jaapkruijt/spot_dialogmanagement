@@ -1,7 +1,8 @@
 import logging
+import uuid
 from typing import List, Union
 
-from cltl.combot.event.emissor import TextSignalEvent, AudioSignalStarted, SignalEvent
+from cltl.combot.event.emissor import TextSignalEvent, AudioSignalStarted, SignalEvent, AnnotationEvent
 from cltl.combot.event.bdi import DesireEvent
 from cltl.combot.infra.config import ConfigurationManager
 from cltl.combot.infra.event import Event, EventBus
@@ -9,10 +10,10 @@ from cltl.combot.infra.resource import ResourceManager
 from cltl.combot.infra.time_util import timestamp_now
 from cltl.combot.infra.topic_worker import TopicWorker
 from cltl_service.emissordata.client import EmissorDataClient
-from emissor.representation.scenario import TextSignal, Modality, class_type
+from emissor.representation.scenario import TextSignal, Modality, class_type, Annotation, class_source, Mention
 
 from spot.dialog.dialog_manager import DialogManager, State, ConvState, Input
-from spot_service.dialog.api import GameSignal, GameEvent
+from spot_service.dialog.api import GameSignal, GameEvent, SpotterAnnotationEvent
 
 logger = logging.getLogger(__name__)
 
@@ -31,18 +32,19 @@ class SpotDialogService:
         text_input_topic = config.get("topic_text_input")
         game_input_topic = config.get("topic_game_input")
         game_state_topic = config.get("topic_game_state")
+        annotation_topic = config.get("topic_annotation")
         output_topic = config.get("topic_text_output")
 
         intention_topic = config.get("topic_intention") if "topic_intention" in config else None
         desire_topic = config.get("topic_desire") if "topic_desire" in config else None
         intentions = config.get("intentions", multi=True) if "intentions" in config else []
 
-        return cls(mic_topic, text_input_topic, game_input_topic, game_state_topic, output_topic,
+        return cls(mic_topic, text_input_topic, game_input_topic, game_state_topic, output_topic, annotation_topic,
                    intention_topic, desire_topic, intentions,
                    manager, emissor_client, event_bus, resource_manager)
 
     def __init__(self, mic_topic: str, text_input_topic: str, game_input_topic: str, game_state_topic: str,
-                 output_topic: str, intention_topic: str, desire_topic: str, intentions: List[str],
+                 output_topic: str, annotation_topic: str, intention_topic: str, desire_topic: str, intentions: List[str],
                  manager: DialogManager, emissor_client: EmissorDataClient,
                  event_bus: EventBus, resource_manager: ResourceManager):
         self._manager = manager
@@ -56,6 +58,7 @@ class SpotDialogService:
         self._game_input_topic = game_input_topic
         self._game_state_topic = game_state_topic
         self._output_topic = output_topic
+        self._annotation_topic = annotation_topic
 
         self._intention_topic = intention_topic
         self._desire_topic = desire_topic
@@ -91,7 +94,7 @@ class SpotDialogService:
 
     def _process(self, event: Event[Union[TextSignalEvent, AudioSignalStarted, SignalEvent[GameEvent]]]):
         if event.metadata.topic == self._game_input_topic:
-            response, state, input = self._manager.game_event(event.payload.signal.value)
+            response, state, input, annotations = self._manager.game_event(event.payload.signal.value)
             self._send_reply(response, state, input)
             logger.info("Handled game event %s", event.payload.signal.value)
         elif event.metadata.topic == self._mic_topic:
@@ -103,8 +106,10 @@ class SpotDialogService:
         elif event.metadata.topic == self._text_input_topic and not self._ignore_utterances:
             # Ignore events until utterance is handled
             self._set_ignore_utterances()
-            response, state, input = self._manager.utterance(event.payload.signal.text)
+            response, state, input, annotations = self._manager.utterance(event.payload.signal.text)
             self._send_reply(response, state, input)
+            if annotations:
+                self._send_annotations(event.payload.signal, annotations)
         else:
             logger.info("Ignored event %s (ignore utterances: %s)", event, self._ignore_utterances)
 
@@ -125,6 +130,12 @@ class SpotDialogService:
 
         if ConvState.GAME_FINISH == state.conv_state:
             self._event_bus.publish(self._desire_topic, Event.for_payload(DesireEvent(['quit'])))
+
+    def _send_annotations(self, signal: TextSignal, annotations):
+        annotations = [Annotation(type=class_type(val), value=val, source=class_source(self), timestamp=timestamp_now())
+                       for val in annotations]
+        mention = Mention(uuid.uuid4(), segment=[signal.ruler], annotations=annotations)
+        self._event_bus.publish(self._annotation_topic, Event.for_payload(SpotterAnnotationEvent.create([mention])))
 
     def _set_ignore_utterances(self, ignore=True):
         if self._ignore_utterances is None:

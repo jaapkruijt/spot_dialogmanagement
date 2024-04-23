@@ -1,14 +1,20 @@
+import dataclasses
 import uuid
-from typing import Optional, Iterable, Any
+from typing import Iterable, Any
+from typing import Optional
 
+from cltl.combot.event.emissor import AnnotationEvent
 from emissor.representation.container import AtomicContainer, AtomicRuler, TemporalRuler
 from emissor.representation.ldschema import emissor_dataclass
 from emissor.representation.scenario import Signal, Mention, Modality
 from emissor.representation.util import Identifier
 
+from spot.dialog.dialog_manager import DisambigutionResult
 
-import dataclasses
-from typing import Optional
+
+@dataclasses.dataclass
+class SpotterAnnotationEvent(AnnotationEvent):
+    pass
 
 
 @dataclasses.dataclass
