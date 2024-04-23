@@ -21,15 +21,15 @@ NO_MATCH_PHRASES = ['Ik begrijp niet zo goed wie je bedoelt. Kan je het nog een 
 # ACKNOWLEDGE_PHRASES = ['Oh, die staat bij mij op plek %s']
 QUESTIONAIRE_PHRASES=["We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het scherm zie je nu onze score voor deze ronde. Voordat we doorgaan naar de volgende ronde, wil ik je eerst vragen de vragenlijst in te vullen. Druk maar op de link op het scherm om naar de vragen te gaan. Ik ben stil terwijl jij de vragen invult. Daarna gaan we weer verder."]
 ROUND_FINISH_PHRASES = [
-'We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het \pau=5\ scherm zie je nu onze score \pau=5\ voor \\vct=102\\ deze \\vct=100\\ ronde. We kunnen nu door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
-    'Dit was het voor \\vct=102\\deze \\vct=100\ ronde. Druk maar op de knop Ga Door. Op het \pau=5\ scherm zie je nu onze score voor \\vct=102\\ deze \\vct=100\\ ronde. Laten we naar de volgende ronde gaan. Druk maar weer op de knop Ga Door.',
-    'Oke. Druk maar op de knop Ga Door. Onze score voor \\vct=101\\ deze \\vct=100\\ ronde verschijnt nu in beeld. We gaan door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
-    'Oke, we hebben ze allemaal gehad. Druk maar op de knop Ga Door. Dit is onze score. Laten we doorgaan naar de volgende ronde. Druk maar weer op de knop Ga Door.',
-    '\pau=10\ Deze ronde is klaar. Druk maar op de knop Ga Door. Onze score komt nu in beeld. Druk op de knop Ga Door om naar de volgende ronde te gaan.'
+'We hebben ze allemaal gehad. We kunnen nu door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
+    'Dit was het voor \\vct=102\\deze \\vct=100\ ronde. Druk maar op de knop Ga Door. Laten we naar de volgende ronde gaan. Druk maar weer op de knop Ga Door.',
+    'Oke. We gaan door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
+    'Oke, we hebben ze allemaal gehad. Laten we doorgaan naar de volgende ronde. Druk maar weer op de knop Ga Door.',
+    '\pau=10\ Deze ronde is klaar. Druk op de knop Ga Door om naar de volgende ronde te gaan.'
 ]
 QUERY_NEXT_PHRASES = ['En de volgende?', 'Oke, we gaan door met de volgende.', 'Oke, en de volgende?',
                       'En de figuur die daarnaast staat?', 'En die daarnaast staat?', 'Oké, en die daarnaast staat?']
-ACKNOWLEDGE_SAME_POSITION_PHRASES = ['Oh ja, %s staat bij mij ook op plek {position}', '%s staat bij mij ook op die plek.',
+ACKNOWLEDGE_SAME_POSITION_PHRASES = ['Oh ja, %s staat bij mij ook op plek {position}.', '%s staat bij mij ook op die plek.',
                                      'He, %s staat bij mij ook op die plek.', 'Ja, %s staat bij mij op dezelfde plek.',
                                      'Oh ja, %s staat bij mij op dezelfde plek.']
 ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES = ['Bij mij staat %s op plek {position}.',
@@ -360,9 +360,9 @@ class DialogManager:
             next_state = state.transition(ConvState.QUESTIONNAIRE if self.has_next_round(state) else ConvState.OUTRO)
         elif state.conv_state == ConvState.ROUND_FINISH:
             if state.round == 1:
-                reply = 'We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het \pau=5\ scherm zie je nu onze score \pau=5\ voor \\vct=102\\ deze \\vct=100\\ ronde. Voordat we doorgaan naar de volgende ronde, wil ik je vragen om eerst een paar vragen te beantwoorden. Ik ga stil zijn \pau=50\ terwijl jij de vragen beantwoord. Tik op het \pau=5\ \\vct=95\ scherm \pau=5\ \\vct=100\ op de knop, om door te gaan naar de vragen. Na de vragen gaan we weer door met het spel.'
+                reply = 'We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Voordat we doorgaan naar de volgende ronde, wil ik je vragen om eerst een paar vragen te beantwoorden. Ik ga stil zijn \pau=50\ terwijl jij de vragen beantwoord. Tik op het \pau=5\ \\vct=95\ scherm \pau=5\ \\vct=100\ op de knop, om door te gaan naar de vragen. Na de vragen gaan we weer door met het spel.'
             else:
-                reply = 'We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Goed gedaan! Op het \pau=5\ scherm zie je nu onze eindscore. Mooie score hoor! Het spel is nu afgelopen. Maar \pau=70\ ik wil je nog wel vragen om wat vragen te beantwoorden. Ik ga stil zijn \pau=50\ terwijl jij de vragen beantwoord. Hierna zijn we klaar voor vandaag. Tik op het \pau=5\ \\vct=95\scherm op de knop, om naar de vragen te gaan.'
+                reply = 'We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Goed gedaan! Het spel is nu afgelopen. Maar \pau=70\ ik wil je nog wel vragen om wat vragen te beantwoorden. Ik ga stil zijn \pau=50\ terwijl jij de vragen beantwoord. Hierna zijn we klaar voor vandaag. Tik op het \pau=5\ \\vct=95\scherm op de knop, om naar de vragen te gaan.'
             action = Action(reply, await_input=Input.GAME)
             next_state = state.transition(ConvState.QUESTIONNAIRE)
         else:
