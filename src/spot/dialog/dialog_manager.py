@@ -393,7 +393,7 @@ class DialogManager:
         return action, next_state
 
     def _act_game_finished(self, state):
-        action = Action("Goodbye!", await_input=Input.GAME)
+        action = Action("Tot ziens!", await_input=Input.GAME)
 
         self.save_interaction()
 
