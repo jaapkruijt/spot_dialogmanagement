@@ -127,6 +127,13 @@ class Action:
     await_input: Optional[Input] = None
 
 
+@dataclasses.dataclass
+class DisambigutionResult:
+    selected: int
+    certainty: float
+    status: DisambiguatorStatus
+
+
 class DialogManager:
     def __init__(self, disambiguator, storage_path: str, rounds=6, max_position=5, questionnaires=[1, 6], success_threshold=0.3, high_engagement=True):
         self._disambiguator = disambiguator
@@ -157,8 +164,11 @@ class DialogManager:
     def run(self, utterance, game_transition):
         action = Action()
         reply = ""
+        annotations = []
         while not action.await_input:
-            action, next_state = self.act(utterance, game_transition, self._state)
+            action, next_state, annotation = self.act(utterance, game_transition, self._state)
+            if annotation:
+                annotations += [annotation]
             if action.reply:
                 if reply:
                     reply += " \\pau=1000\\" + action.reply
@@ -170,9 +180,11 @@ class DialogManager:
         # TODO Clear utterance and mention and anything else
         self._state = next_state.transition(self._state.conv_state, utterance=None, mention=None)
 
-        return reply, self._state, action.await_input
+        return reply, self._state, action.await_input, annotations
 
     def act(self, utterance, game_transition, state):
+        annotation = None
+
         if ConvState.GAME_INIT == state.conv_state:
             action, next_state = self.act_game_init(game_transition, state)
         elif ConvState.GAME_START == state.conv_state:
@@ -184,7 +196,7 @@ class DialogManager:
         elif ConvState.QUERY_NEXT == state.conv_state:
             action, next_state = self._act_query_next(state)
         elif ConvState.DISAMBIGUATION == state.conv_state:
-            action, next_state = self._act_disambiguation(state, utterance)
+            action, next_state, annotation = self._act_disambiguation(state, utterance)
         elif ConvState.ACKNOWLEDGE == state.conv_state:
             action, next_state = self._act_acknowledge(utterance, state)
         elif ConvState.REPAIR == state.conv_state:
@@ -199,7 +211,7 @@ class DialogManager:
             raise ValueError("Invalid conversational state " + str(state.conv_state))
 
         # Put selected, certainty, disambiguator status into EMISSOR: mention is whole utterance, annotation a custom value with those data values
-        return action, next_state
+        return action, next_state, annotation
 
     def act_game_init(self, game_transition, state):
         if game_transition:
@@ -272,6 +284,7 @@ class DialogManager:
         return action, next_state
 
     def _act_disambiguation(self, state, utterance):
+        annotation = None
         if state.utterance is None and utterance:
             action = Action()
             next_state = state.transition(ConvState.DISAMBIGUATION, utterance=utterance)
@@ -282,10 +295,15 @@ class DialogManager:
             next_state = state.transition(ConvState.DISAMBIGUATION if mention else state.conv_state, mention=mention)
         elif state.mention:
             disambiguation_result = self._disambiguator.disambiguate(state.mention)
-            if DisambiguatorStatus.SUCCESS_HIGH.name == self._disambiguator.status():
+            selected = disambiguation_result[0]
+            certainty = disambiguation_result[1]
+            status = self._disambiguator.status()
+            annotation = DisambigutionResult(selected=selected, certainty=certainty, status=status)
+
+            if DisambiguatorStatus.SUCCESS_HIGH.name == status:
                 action = Action()
                 next_state = state.transition(ConvState.ACKNOWLEDGE, disambiguation_result=disambiguation_result, confirmation=ConfirmationState.ACCEPTED)
-            elif DisambiguatorStatus.SUCCESS_LOW.name == self._disambiguator.status():
+            elif DisambiguatorStatus.SUCCESS_LOW.name == status:
                 action = Action()
                 next_state = state.transition(ConvState.ACKNOWLEDGE,  disambiguation_result=disambiguation_result, confirmation=ConfirmationState.CONFIRM)
             else:
@@ -295,7 +313,7 @@ class DialogManager:
             action = Action(await_input=Input.REPLY)
             next_state = state
 
-        return action, next_state
+        return action, next_state, annotation
 
     def _act_acknowledge(self, utterance, state):
         if ConfirmationState.ACCEPTED == state.confirmation:
