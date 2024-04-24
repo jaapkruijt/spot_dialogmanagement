@@ -19,12 +19,12 @@ logger = logging.getLogger(__name__)
 NO_MATCH_PHRASES = ['Ik begrijp niet zo goed wie je bedoelt. Kan je het nog een keer omschrijven?',
                     'Ik snap niet zo goed wat je zei. Kan je het iets \\vct=85\\ anders \\vct=100\\ formuleren?']
 # ACKNOWLEDGE_PHRASES = ['Oh, die staat bij mij op plek %s']
-QUESTIONAIRE_PHRASES=["We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het scherm zie je nu onze score voor deze ronde. Voordat we doorgaan naar de volgende ronde, wil ik je eerst vragen de vragenlijst in te vullen. Druk maar op de link op het scherm om naar de vragen te gaan. Ik ben stil terwijl jij de vragen invult. Daarna gaan we weer verder."]
+# QUESTIONAIRE_PHRASES=["We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het scherm zie je nu onze score voor deze ronde. Voordat we doorgaan naar de volgende ronde, wil ik je eerst vragen de vragenlijst in te vullen. Druk maar op de link op het scherm om naar de vragen te gaan. Ik ben stil terwijl jij de vragen invult. Daarna gaan we weer verder."]
 ROUND_FINISH_PHRASES = [
-'We hebben ze allemaal gehad. We kunnen nu door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
-    'Dit was het voor \\vct=102\\deze \\vct=100\ ronde. Druk maar op de knop Ga Door. Laten we naar de volgende ronde gaan. Druk maar weer op de knop Ga Door.',
+'We hebben ze allemaal gehad. We kunnen nu door naar de volgende ronde. Druk maar op de knop Ga Door.',
+    'Dit was het voor \\vct=102\\deze \\vct=100\ ronde. Laten we naar de volgende ronde gaan. Druk maar op de knop Ga Door.',
     'Oke. We gaan door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
-    'Oke, we hebben ze allemaal gehad. Laten we doorgaan naar de volgende ronde. Druk maar weer op de knop Ga Door.',
+    'Oke, we hebben ze allemaal gehad. Laten we doorgaan naar de volgende ronde. Druk maar op de knop Ga Door.',
     '\pau=10\ Deze ronde is klaar. Druk op de knop Ga Door om naar de volgende ronde te gaan.'
 ]
 QUERY_NEXT_PHRASES = ['En de volgende?', 'Oke, we gaan door met de volgende.', 'Oke, en de volgende?',
@@ -262,7 +262,10 @@ class DialogManager:
         game_round = state.round + 1
         self._disambiguator.advance_round(start=(game_round == 1))
 
-        action = Action("Laten we beginnen!")
+        if state.round == 1:
+            action = Action("Laten we beginnen!")
+        else:
+            action = Action("Laten we verder gaan!")
         next_state = state.transition(ConvState.QUERY_NEXT, round=game_round, position=1, utterance=None,
                                       mention=None, disambiguation_result=None, confirmation=None)
 
@@ -467,8 +470,8 @@ class DialogManager:
                     response = random.choice(ACKNOWLEDGE_SAME_POSITION_PHRASES).format_map({"position": position}) % "die"
                 else:
                     response = random.choice(ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES).format_map({"position": position}) % "die"
-            response = response + " Vul dat maar in op de \pau=10\ theblet"
-            # TODO return selected
+            if state.round == 1:
+                response = response + " Vul dat maar in op de \pau=10\ theblet"
             return response
 
     def has_next_round(self, state):
