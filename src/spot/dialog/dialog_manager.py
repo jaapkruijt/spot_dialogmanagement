@@ -15,31 +15,6 @@ from spot.dialog.conversations import IntroStep, GameStartStep, OutroStep
 
 logger = logging.getLogger(__name__)
 
-# TODO is it possible to add string formatting to some phrases and not others?
-NO_MATCH_PHRASES = ['Ik begrijp niet zo goed wie je bedoelt. Kan je het nog een keer omschrijven?',
-                    'Ik snap niet zo goed wat je zei. Kan je het iets \\vct=85\\ anders \\vct=100\\ formuleren?']
-# ACKNOWLEDGE_PHRASES = ['Oh, die staat bij mij op plek %s']
-# QUESTIONAIRE_PHRASES=["We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Op het scherm zie je nu onze score voor deze ronde. Voordat we doorgaan naar de volgende ronde, wil ik je eerst vragen de vragenlijst in te vullen. Druk maar op de link op het scherm om naar de vragen te gaan. Ik ben stil terwijl jij de vragen invult. Daarna gaan we weer verder."]
-ROUND_FINISH_PHRASES = [
-'We hebben ze allemaal gehad. We kunnen nu door naar de volgende ronde. Druk maar op de knop Ga Door.',
-    'Dit was het voor \\vct=102\\deze \\vct=100\ ronde. Laten we naar de volgende ronde gaan. Druk maar op de knop Ga Door.',
-    'Oke. We gaan door naar de volgende ronde. Druk maar weer op de knop Ga Door.',
-    'Oke, we hebben ze allemaal gehad. Laten we doorgaan naar de volgende ronde. Druk maar op de knop Ga Door.',
-    '\pau=10\ Deze ronde is klaar. Druk op de knop Ga Door om naar de volgende ronde te gaan.'
-]
-QUERY_NEXT_PHRASES = ['En de volgende?', 'Oke, we gaan door met de volgende.', 'Oke, en de volgende?',
-                      'En de figuur die daarnaast staat?', 'En die daarnaast staat?', 'Oké, en die daarnaast staat?']
-ACKNOWLEDGE_SAME_POSITION_PHRASES = ['Oh ja, %s staat bij mij ook op plek {position}.', '%s staat bij mij ook op die plek.',
-                                     'He, %s staat bij mij ook op die plek.', 'Ja, %s staat bij mij op dezelfde plek.',
-                                     'Oh ja, %s staat bij mij op dezelfde plek.']
-ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES = ['Bij mij staat %s op plek {position}.',
-                                          '%s staat bij mij ergens anders, namelijk op plek {position}.',
-                                          'Oh, %s staat bij mij op plek {position}.',
-                                          'Even kijken, nee, bij mij staat %s op plek {position}.']
-MATCH_PREVIOUS_PHRASES = ['Wacht even, volgens mij hebben we deze al gehad. Wil je het \\vct=110\ nog \\vct=100\ een keer omschrijven?',
-                          'Even kijken hoor, ik dacht dat we deze al hadden gehad. Laten we even een stap terug.  Kan je iets noemen wat specifiek is voor die figuur?'
-                          ]
-
 
 class ConvState(Enum):
     GAME_INIT = auto()
@@ -135,8 +110,11 @@ class DisambigutionResult:
 
 
 class DialogManager:
-    def __init__(self, disambiguator, storage_path: str, rounds=6, max_position=5, questionnaires=[1, 6], success_threshold=0.3, high_engagement=True):
+    def __init__(self, disambiguator, phrases: dict, session: int, storage_path: str, rounds=6, max_position=5,
+                 questionnaires=[1, 6], success_threshold=0.3, high_engagement=True):
         self._disambiguator = disambiguator
+        self._session = session
+        self._phrases = phrases
         self._storage_path = storage_path
         self._success_threshold = success_threshold
         self._positions = max_position
@@ -226,9 +204,13 @@ class DialogManager:
         return action, next_state
 
     def act_game_start(self, game_transition, state):
-        if state.game_start is None:
+        if not self._phrases[str(self._session)]["start"]:
+            logger.info("Skip game start for session %s", self._session)
             action = Action()
-            next_state = state.transition(ConvState.GAME_START, game_start=GameStartStep())
+            next_state = state.transition(ConvState.INTRO, game_start=None)
+        elif state.game_start is None:
+            action = Action()
+            next_state = state.transition(ConvState.GAME_START, game_start=GameStartStep(statements=self._phrases[str(self._session)]["start"]))
         elif not state.game_start.final:
             step = state.game_start.next()
             next_state = state.transition(ConvState.GAME_START, game_start=step)
@@ -242,9 +224,13 @@ class DialogManager:
         return action, next_state
 
     def _act_intro(self, game_transition, state):
-        if state.intro is None:
+        if not self._phrases[str(self._session)]["intro"]:
+            logger.info("Skip intro for session %s", self._session)
             action = Action()
-            next_state = state.transition(ConvState.INTRO, intro=IntroStep())
+            next_state = state.transition(ConvState.ROUND_START, intro=None, round=0)
+        elif state.intro is None:
+            action = Action()
+            next_state = state.transition(ConvState.INTRO, intro=IntroStep(statements=self._phrases[str(self._session)]["intro"]))
         elif not state.intro.final:
             step = state.intro.next()
             next_state = state.transition(ConvState.INTRO, intro=step)
@@ -278,7 +264,7 @@ class DialogManager:
             if 1 == state.position:
                 action = Action("Wie staat er bij jou op plek 1?", await_input=Input.REPLY)
             else:
-                action = Action(random.choice(QUERY_NEXT_PHRASES), Input.REPLY)
+                action = Action(random.choice(self._phrases["QUERY_NEXT_PHRASES"]), Input.REPLY)
         # if coming from repair
         else:
             action = Action("Wie staat er bij jou op plek " + str(state.position) + "?", Input.REPLY)
@@ -355,12 +341,12 @@ class DialogManager:
 
     def _act_repair(self, state):
         if DisambiguatorStatus.NO_MATCH.name == self._disambiguator.status():
-            action = Action(random.choice(NO_MATCH_PHRASES), await_input=Input.REPLY)
+            action = Action(random.choice(self._phrases["NO_MATCH_PHRASES"]), await_input=Input.REPLY)
         elif DisambiguatorStatus.NEG_RESPONSE.name == self._disambiguator.status():
             # TODO not sure if this is way to go
             action = Action("Oke, kun je het op een andere manier omschrijven?", await_input=Input.REPLY)
         elif DisambiguatorStatus.MATCH_PREVIOUS.name == self._disambiguator.status():
-            action = Action(random.choice(MATCH_PREVIOUS_PHRASES), await_input=Input.REPLY)
+            action = Action(random.choice(self._phrases["MATCH_PREVIOUS_PHRASES"]), await_input=Input.REPLY)
         elif DisambiguatorStatus.MATCH_MULTIPLE.name == self._disambiguator.status():
             description = state.disambiguation_result[3]
             action = Action(f"{description}?", await_input=Input.REPLY)
@@ -376,7 +362,7 @@ class DialogManager:
             action = Action()
             next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.OUTRO)
         elif state.round not in self._questionaire_rounds and state.conv_state != ConvState.QUESTIONNAIRE:
-            reply = random.choice(ROUND_FINISH_PHRASES)
+            reply = random.choice(self._phrases["ROUND_FINISH_PHRASES"])
             action = Action(reply, await_input=Input.GAME if self.has_next_round(state) else None)
             next_state = state.transition(ConvState.QUESTIONNAIRE if self.has_next_round(state) else ConvState.OUTRO)
         elif state.conv_state == ConvState.ROUND_FINISH:
@@ -393,9 +379,13 @@ class DialogManager:
         return action, next_state
 
     def _act_outro(self, utterance, state):
-        if state.outro is None:
+        if not self._phrases[str(self._session)]["outro"]:
+            logger.info("Skip outro for session %s", self._session)
             action = Action()
-            next_state = state.transition(ConvState.OUTRO, outro=OutroStep())
+            next_state = state.transition(ConvState.GAME_FINISH, outro=None, utterance=None)
+        elif state.outro is None:
+            action = Action()
+            next_state = state.transition(ConvState.OUTRO, outro=OutroStep(statements=self._phrases[str(self._session)]["outro"]))
         elif state.outro.store_input and not state.utterance:
             if utterance:
                 self.save_preferences(utterance)
@@ -426,7 +416,7 @@ class DialogManager:
 
         storage_dir = os.path.join(self._storage_path, "dialog")
         Path(storage_dir).mkdir(parents=True, exist_ok=True)
-        data_path = os.path.join(storage_dir, f"pp_{self._participant_id}_int{1}_preferences.json")
+        data_path = os.path.join(storage_dir, f"pp_{self._participant_id}_int{self._session}_preferences.json")
 
         try:
             with open(data_path, 'r') as data_file:
@@ -434,6 +424,7 @@ class DialogManager:
         except:
             data = {}
 
+        # TODO sessions
         preferences = {p.lower() for p in re.findall(r'([Bb]ergen|[Ss]tad|[Ss]trand)', utterance)}
         preference = next(iter(preferences)) if len(preferences) == 1 else ""
         data["answer"] = utterance
@@ -443,7 +434,7 @@ class DialogManager:
             json.dump(data, data_file)
 
     def save_interaction(self):
-        self._disambiguator.save_interaction(self._storage_path, self._participant_id, 1)
+        self._disambiguator.save_interaction(self._storage_path, self._participant_id, self._session)
 
     def get_mention(self, utterance):
         # Eventually add mention detection
@@ -462,14 +453,14 @@ class DialogManager:
             if self.high_engagement:
                 if position == state.position:
                     # TODO is state.position already None here?
-                    response = random.choice(ACKNOWLEDGE_SAME_POSITION_PHRASES).format_map({"position": position}) % description
+                    response = random.choice(self._phrases["ACKNOWLEDGE_SAME_POSITION_PHRASES"]).format_map({"position": position}) % description
                 else:
-                    response = random.choice(ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES).format_map({"position": position}) % description
+                    response = random.choice(self._phrases["ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES"]).format_map({"position": position}) % description
             else:
                 if position == state.position:
-                    response = random.choice(ACKNOWLEDGE_SAME_POSITION_PHRASES).format_map({"position": position}) % "die"
+                    response = random.choice(self._phrases["ACKNOWLEDGE_SAME_POSITION_PHRASES"]).format_map({"position": position}) % "die"
                 else:
-                    response = random.choice(ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES).format_map({"position": position}) % "die"
+                    response = random.choice(self._phrases["ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES"]).format_map({"position": position}) % "die"
             if state.round == 1:
                 response = response + " Vul dat maar in op de \pau=10\ theblet"
             return response
