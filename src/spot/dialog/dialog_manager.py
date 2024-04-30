@@ -248,7 +248,7 @@ class DialogManager:
         game_round = state.round + 1
         self._disambiguator.advance_round(start=(game_round == 1))
 
-        if state.round == 1:
+        if game_round == 1:
             action = Action(self._get_phrase("START_ROUND_1_PHRASES"))
         else:
             action = Action(self._get_phrase("START_ROUND_PHRASES"))
