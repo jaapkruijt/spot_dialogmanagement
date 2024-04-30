@@ -126,6 +126,7 @@ class DialogManager:
 
         self._state = State(ConvState.GAME_INIT)
         self._round = 0
+        self._encouragement_chance = 0.20
 
     @property
     def participant_id(self):
@@ -463,6 +464,8 @@ class DialogManager:
                     response = self._get_phrase("ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES").format_map({"position": position}) % "die"
             if state.round == 1:
                 response = response + " " + self._get_phrase("ACKNOWLEDGE_HINT_ROUND_1_PHRASES")
+            if random.random() < self._encouragement_chance:
+                response = response + self._get_phrase("ENCOURAGEMENT_PHRASES")
             return response
 
     def has_next_round(self, state):
