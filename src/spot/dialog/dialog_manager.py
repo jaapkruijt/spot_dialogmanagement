@@ -204,13 +204,13 @@ class DialogManager:
         return action, next_state
 
     def act_game_start(self, game_transition, state):
-        if not self._phrases[str(self._session)]["start"]:
+        if not self._has_conversation("start"):
             logger.info("Skip game start for session %s", self._session)
             action = Action()
             next_state = state.transition(ConvState.INTRO, game_start=None)
         elif state.game_start is None:
             action = Action()
-            next_state = state.transition(ConvState.GAME_START, game_start=GameStartStep(statements=self._phrases[str(self._session)]["start"]))
+            next_state = state.transition(ConvState.GAME_START, game_start=GameStartStep(statements=self._get_phrases("start")))
         elif not state.game_start.final:
             step = state.game_start.next()
             next_state = state.transition(ConvState.GAME_START, game_start=step)
@@ -224,13 +224,13 @@ class DialogManager:
         return action, next_state
 
     def _act_intro(self, game_transition, state):
-        if not self._phrases[str(self._session)]["intro"]:
+        if not self._has_conversation("intro"):
             logger.info("Skip intro for session %s", self._session)
             action = Action()
             next_state = state.transition(ConvState.ROUND_START, intro=None, round=0)
         elif state.intro is None:
             action = Action()
-            next_state = state.transition(ConvState.INTRO, intro=IntroStep(statements=self._phrases[str(self._session)]["intro"]))
+            next_state = state.transition(ConvState.INTRO, intro=IntroStep(statements=self._get_phrases("intro")))
         elif not state.intro.final:
             step = state.intro.next()
             next_state = state.transition(ConvState.INTRO, intro=step)
@@ -249,9 +249,9 @@ class DialogManager:
         self._disambiguator.advance_round(start=(game_round == 1))
 
         if state.round == 1:
-            action = Action("Laten we beginnen!")
+            action = Action(self._get_phrase("START_ROUND_1_PHRASES"))
         else:
-            action = Action("Laten we verder gaan!")
+            action = Action(self._get_phrase("START_ROUND_PHRASES"))
         next_state = state.transition(ConvState.QUERY_NEXT, round=game_round, position=1, utterance=None,
                                       mention=None, disambiguation_result=None, confirmation=None)
 
@@ -262,12 +262,12 @@ class DialogManager:
         # if asking for next position
         if DisambiguatorStatus.AWAIT_NEXT.name == self._disambiguator.status():
             if 1 == state.position:
-                action = Action("Wie staat er bij jou op plek 1?", await_input=Input.REPLY)
+                action = Action(self._get_phrase("QUERY_NEXT_POS_1_PHRASES"), await_input=Input.REPLY)
             else:
-                action = Action(random.choice(self._phrases["QUERY_NEXT_PHRASES"]), Input.REPLY)
+                action = Action(self._get_phrase("QUERY_NEXT_PHRASES"), Input.REPLY)
         # if coming from repair
         else:
-            action = Action("Wie staat er bij jou op plek " + str(state.position) + "?", Input.REPLY)
+            action = Action(self._get_phrase("QUERY_NEXT_REPAIR_PHRASES").format_map({"position": state.position}), Input.REPLY)
         next_state = state.transition(ConvState.DISAMBIGUATION)
 
         return action, next_state
@@ -328,11 +328,11 @@ class DialogManager:
                 action = Action()
                 next_state = state.transition(state.conv_state, confirmation=ConfirmationState.ACCEPTED)
             elif "nee" in utterance.lower():
-                action = Action("Oke, we proberen het opnieuw")
+                action = Action(self._get_phrase("ACKNOWLEDGE_NEE_PHRASES"))
                 # Restart, but stay in the same position
                 next_state = state.transition(ConvState.QUERY_NEXT, utterance=None, mention=None, disambiguation_result=None, confirmation=None)
             else:
-                action = Action("Ik snap het niet, ja of nee?", await_input=Input.REPLY)
+                action = Action(self._get_phrase("ACKNOWLEDGE_FAILED_PHRASES"), await_input=Input.REPLY)
                 next_state = state
         else:
             raise ValueError("Invalid confirmation status " + str(state.confirmation))
@@ -341,12 +341,12 @@ class DialogManager:
 
     def _act_repair(self, state):
         if DisambiguatorStatus.NO_MATCH.name == self._disambiguator.status():
-            action = Action(random.choice(self._phrases["NO_MATCH_PHRASES"]), await_input=Input.REPLY)
+            action = Action(self._get_phrase("NO_MATCH_PHRASES"), await_input=Input.REPLY)
         elif DisambiguatorStatus.NEG_RESPONSE.name == self._disambiguator.status():
             # TODO not sure if this is way to go
-            action = Action("Oke, kun je het op een andere manier omschrijven?", await_input=Input.REPLY)
+            action = Action(self._get_phrase("REPAIR_NEG_RESPONSE_PHRASES"), await_input=Input.REPLY)
         elif DisambiguatorStatus.MATCH_PREVIOUS.name == self._disambiguator.status():
-            action = Action(random.choice(self._phrases["MATCH_PREVIOUS_PHRASES"]), await_input=Input.REPLY)
+            action = Action(self._get_phrase("MATCH_PREVIOUS_PHRASES"), await_input=Input.REPLY)
         elif DisambiguatorStatus.MATCH_MULTIPLE.name == self._disambiguator.status():
             description = state.disambiguation_result[3]
             action = Action(f"{description}?", await_input=Input.REPLY)
@@ -362,14 +362,14 @@ class DialogManager:
             action = Action()
             next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.OUTRO)
         elif state.round not in self._questionaire_rounds and state.conv_state != ConvState.QUESTIONNAIRE:
-            reply = random.choice(self._phrases["ROUND_FINISH_PHRASES"])
+            reply = self._get_phrase("ROUND_FINISH_PHRASES")
             action = Action(reply, await_input=Input.GAME if self.has_next_round(state) else None)
             next_state = state.transition(ConvState.QUESTIONNAIRE if self.has_next_round(state) else ConvState.OUTRO)
         elif state.conv_state == ConvState.ROUND_FINISH:
             if state.round == 1:
-                reply = 'We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Voordat we doorgaan naar de volgende ronde, wil ik je vragen om eerst een paar vragen te beantwoorden. Ik ga stil zijn \pau=50\ terwijl jij de vragen beantwoord. Tik op het \pau=5\ \\vct=95\ scherm \pau=5\ \\vct=100\ op de knop, om door te gaan naar de vragen. Na de vragen gaan we weer door met het spel.'
+                reply = self._get_phrase("FINISH_ROUND_1_PHRASES")
             else:
-                reply = 'We hebben ze allemaal gehad. Druk maar op de knop Ga Door. Goed gedaan! Het spel is nu afgelopen. Maar \pau=70\ ik wil je nog wel vragen om wat vragen te beantwoorden. Ik ga stil zijn \pau=50\ terwijl jij de vragen beantwoord. Hierna zijn we klaar voor vandaag. Tik op het \pau=5\ \\vct=95\scherm op de knop, om naar de vragen te gaan.'
+                reply = self._get_phrase("FINISH_ROUND_PHRASES")
             action = Action(reply, await_input=Input.GAME)
             next_state = state.transition(ConvState.QUESTIONNAIRE)
         else:
@@ -379,13 +379,13 @@ class DialogManager:
         return action, next_state
 
     def _act_outro(self, utterance, state):
-        if not self._phrases[str(self._session)]["outro"]:
+        if not self._has_conversation("outro"):
             logger.info("Skip outro for session %s", self._session)
             action = Action()
             next_state = state.transition(ConvState.GAME_FINISH, outro=None, utterance=None)
         elif state.outro is None:
             action = Action()
-            next_state = state.transition(ConvState.OUTRO, outro=OutroStep(statements=self._phrases[str(self._session)]["outro"]))
+            next_state = state.transition(ConvState.OUTRO, outro=OutroStep(statements=self._get_phrases("outro")))
         elif state.outro.store_input and not state.utterance:
             if utterance:
                 self.save_preferences(utterance)
@@ -404,7 +404,7 @@ class DialogManager:
         return action, next_state
 
     def _act_game_finished(self, state):
-        action = Action("Tot ziens!", await_input=Input.GAME)
+        action = Action(self._get_phrase("FINISH_GAME_PHRASES"), await_input=Input.GAME)
 
         self.save_interaction()
 
@@ -453,16 +453,16 @@ class DialogManager:
             if self.high_engagement:
                 if position == state.position:
                     # TODO is state.position already None here?
-                    response = random.choice(self._phrases["ACKNOWLEDGE_SAME_POSITION_PHRASES"]).format_map({"position": position}) % description
+                    response = self._get_phrase("ACKNOWLEDGE_SAME_POSITION_PHRASES").format_map({"position": position}) % description
                 else:
-                    response = random.choice(self._phrases["ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES"]).format_map({"position": position}) % description
+                    response = self._get_phrase("ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES").format_map({"position": position}) % description
             else:
                 if position == state.position:
-                    response = random.choice(self._phrases["ACKNOWLEDGE_SAME_POSITION_PHRASES"]).format_map({"position": position}) % "die"
+                    response = self._get_phrase("ACKNOWLEDGE_SAME_POSITION_PHRASES").format_map({"position": position}) % "die"
                 else:
-                    response = random.choice(self._phrases["ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES"]).format_map({"position": position}) % "die"
+                    response = self._get_phrase("ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES").format_map({"position": position}) % "die"
             if state.round == 1:
-                response = response + " Vul dat maar in op de \pau=10\ theblet"
+                response = response + " " + self._get_phrase("ACKNOWLEDGE_HINT_ROUND_1_PHRASES")
             return response
 
     def has_next_round(self, state):
@@ -480,3 +480,20 @@ class DialogManager:
             return result
         else:
             return value
+
+    def _get_phrase(self, key: str):
+        session_key = str(self._session)
+
+        choices = self._phrases[session_key][key] if key in self._phrases[session_key] else self._phrases[key]
+
+        return choices if isinstance(choices, str) else random.choice(choices)
+
+    def _get_phrases(self, conversation: str):
+        session_key = str(self._session)
+
+        return self._phrases[session_key][conversation]
+
+    def _has_conversation(self, conversation: str):
+        session_key = str(self._session)
+
+        return conversation in self._phrases[session_key] and self._phrases[session_key][conversation]
