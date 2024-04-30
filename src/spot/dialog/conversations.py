@@ -13,7 +13,7 @@ class GameStartStep:
         step = min(self.step + 1, len(self.statements) - 1)
         statement = self.statements[step]
 
-        return GameStartStep(self.statements, qstep, statement, step == len(self.statements) - 1)
+        return GameStartStep(self.statements, step, statement, step == len(self.statements) - 1)
 
 
 @dataclasses.dataclass(frozen=True)
