@@ -123,6 +123,7 @@ class DialogManager:
         self.high_engagement = high_engagement
 
         self._participant_id = None
+        self._participant_name = None
 
         self._state = State(ConvState.GAME_INIT)
         self._round = 0
@@ -131,6 +132,10 @@ class DialogManager:
     @property
     def participant_id(self):
         return self._participant_id
+
+    @property
+    def participant_name(self):
+        return self._participant_name
 
     def game_event(self, event):
         logger.debug("Input (Game): %s", event)
@@ -195,6 +200,7 @@ class DialogManager:
     def act_game_init(self, game_transition, state):
         if game_transition:
             self._participant_id = game_transition.participant_id
+            self._participant_name = game_transition.participant_name
             logger.info("Start game for %s", self._participant_id)
             action = Action()
             next_state = state.transition(ConvState.GAME_START)
@@ -215,7 +221,7 @@ class DialogManager:
         elif not state.game_start.final:
             step = state.game_start.next()
             next_state = state.transition(ConvState.GAME_START, game_start=step)
-            action = Action(step.statement, await_input=Input.REPLY if not next_state.game_start.final else Input.GAME)
+            action = Action(step.statement.format_map({"name": self.participant_name}), await_input=Input.REPLY if not next_state.game_start.final else Input.GAME)
         elif game_transition:
             action = Action()
             next_state = state.transition(ConvState.INTRO, game_start=None)
