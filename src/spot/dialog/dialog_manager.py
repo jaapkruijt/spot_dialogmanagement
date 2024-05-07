@@ -201,6 +201,8 @@ class DialogManager:
         if game_transition:
             self._participant_id = game_transition.participant_id
             self._participant_name = game_transition.participant_name
+            if self._session in ['2', '3']:
+                self.load_interaction()
             logger.info("Start game for %s", self._participant_id)
             action = Action()
             next_state = state.transition(ConvState.GAME_START)
@@ -443,6 +445,9 @@ class DialogManager:
     def save_interaction(self):
         self._disambiguator.save_interaction(self._storage_path, self._participant_id, self._session)
 
+    def load_interaction(self):
+        self._disambiguator.load_interaction(self._storage_path, self._participant_id, str(int(self._session)-1))
+
     def get_mention(self, utterance):
         # Eventually add mention detection
         return utterance
@@ -468,10 +473,10 @@ class DialogManager:
                     response = self._get_phrase("ACKNOWLEDGE_SAME_POSITION_PHRASES").format_map({"position": position}) % "die"
                 else:
                     response = self._get_phrase("ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES").format_map({"position": position}) % "die"
-            if state.round == 1:
+            if int(self._session) == 1 and state.round == 1:
                 response = response + " " + self._get_phrase("ACKNOWLEDGE_HINT_ROUND_1_PHRASES")
             if random.random() < self._encouragement_chance:
-                response = response + self._get_phrase("ENCOURAGEMENT_PHRASES")
+                response = response + " " + self._get_phrase("ENCOURAGEMENT_PHRASES")
             return response
 
     def has_next_round(self, state):
