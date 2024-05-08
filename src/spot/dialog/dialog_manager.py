@@ -7,7 +7,7 @@ import random
 import re
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, Mapping, List
 
 from spot.pragmatic_model.model_ambiguity import DisambiguatorStatus
 
@@ -110,11 +110,12 @@ class DisambigutionResult:
 
 
 class DialogManager:
-    def __init__(self, disambiguator, phrases: dict, session: int, storage_path: str, rounds=6, max_position=5,
-                 questionnaires=[1, 6], success_threshold=0.3, high_engagement=True):
+    def __init__(self, disambiguator, phrases: Mapping, preferences: Mapping[str, List[str]], session: int, storage_path: str,
+                 rounds=6, max_position=5, questionnaires=[1, 6], success_threshold=0.3, high_engagement=True):
         self._disambiguator = disambiguator
         self._session = session
         self._phrases = phrases
+        self._preferences = preferences
         self._storage_path = storage_path
         self._success_threshold = success_threshold
         self._positions = max_position
@@ -423,24 +424,40 @@ class DialogManager:
         if not self._storage_path:
             return
 
-        storage_dir = os.path.join(self._storage_path, "dialog")
-        Path(storage_dir).mkdir(parents=True, exist_ok=True)
-        data_path = os.path.join(storage_dir, f"pp_{self._participant_id}_int{self._session}_preferences.json")
-
+        data_path = self._get_preferences_path(self._participant_id, self._session, self._storage_path)
         try:
             with open(data_path, 'r') as data_file:
                 data = json.load(data_file)
         except:
             data = {}
 
-        # TODO sessions
-        preferences = {p.lower() for p in re.findall(r'([Bb]ergen|[Ss]tad|[Ss]trand)', utterance)}
+        expected_reg = re.compile("|".join(pref.lower() for pref in self._preferences[str(self._session)]))
+        preferences = {p for p in expected_reg.findall(utterance.lower())}
         preference = next(iter(preferences)) if len(preferences) == 1 else ""
         data["answer"] = utterance
         data["preference"] = preference
 
         with open(data_path, 'w') as data_file:
             json.dump(data, data_file)
+
+    @staticmethod
+    def load_preferences(participant_id:str, session: int, storage_path: str):
+        if session == 1:
+            return ""
+
+        data_path = DialogManager._get_preferences_path(participant_id, session - 1, storage_path)
+
+        with open(data_path, 'r') as data_file:
+            data = json.load(data_file)
+
+        return data["preference"]
+
+    @staticmethod
+    def _get_preferences_path(participant_id, session, storage_path):
+        storage_dir = os.path.join(storage_path, "dialog")
+        Path(storage_dir).mkdir(parents=True, exist_ok=True)
+
+        return os.path.join(storage_dir, f"pp_{participant_id}_int{session}_preferences.json")
 
     def save_interaction(self):
         self._disambiguator.save_interaction(self._storage_path, self._participant_id, self._session)
