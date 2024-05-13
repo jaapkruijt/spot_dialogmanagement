@@ -102,6 +102,7 @@ class SpotDialogService:
         if not event:
             # Reached wait-timeout for utterance continuation
             if self._response_cache:
+                logger.debug("Responded after timeout: %s", self._response_cache)
                 self._send_reply(self._response_cache, None, None)
             self._utterance_cache = []
             self._response_cache = None
@@ -124,15 +125,18 @@ class SpotDialogService:
             utterance += event.payload.signal.text
             response, state, input, annotations = self._manager.utterance(utterance)
 
-            if (state.disambiguation_result and state.disambiguation_result.status in
-                    [DisambiguatorStatus.NO_MATCH, DisambiguatorStatus.MATCH_MULTIPLE]):
+            logger.debug("Result from disambiguation: %s, %s, %s, %s", response, state, input, annotations)
+
+            if (annotations and annotations[-1].status in
+                    [DisambiguatorStatus.NO_MATCH.name, DisambiguatorStatus.MATCH_MULTIPLE.name]):
                 self._send_reply(None, state, input)
                 text = event.payload.signal.text
-                logger.info("Cached utterance: %s and response: %s", text, response)
+                logger.debug("Cached utterance: %s and response: %s", text, response)
                 self._utterance_cache.append(text)
                 self._response_cache = response
                 self._set_ignore_utterances(False)
             else:
+                logger.debug("Resonded: %s", response)
                 self._send_reply(response, state, input)
                 self._utterance_cache = []
                 self._response_cache = None
