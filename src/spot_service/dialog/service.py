@@ -122,10 +122,11 @@ class SpotDialogService:
             # Ignore events until utterance is handled
             self._set_ignore_utterances()
             utterance = "" if not self._utterance_cache else " ".join(self._utterance_cache)
+            utterance += " " if utterance else ""
             utterance += event.payload.signal.text
             response, state, input, annotations = self._manager.utterance(utterance)
 
-            logger.debug("Result from disambiguation: %s, %s, %s, %s", response, state, input, annotations)
+            logger.debug("Result from disambiguation of '%s': %s, %s, %s, %s", utterance, response, state, input, annotations)
 
             if (annotations and annotations[-1].status in
                     [DisambiguatorStatus.NO_MATCH.name, DisambiguatorStatus.MATCH_MULTIPLE.name]):
