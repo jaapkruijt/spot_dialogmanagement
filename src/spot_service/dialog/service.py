@@ -13,6 +13,7 @@ from cltl_service.emissordata.client import EmissorDataClient
 from emissor.representation.scenario import TextSignal, Modality, class_type, Annotation, class_source, Mention
 
 from spot.dialog.dialog_manager import DialogManager, State, ConvState, Input
+from spot.pragmatic_model.model_ambiguity import DisambiguatorStatus
 from spot_service.dialog.api import GameSignal, GameEvent, SpotterAnnotationEvent
 
 logger = logging.getLogger(__name__)
@@ -39,13 +40,14 @@ class SpotDialogService:
         desire_topic = config.get("topic_desire") if "topic_desire" in config else None
         intentions = config.get("intentions", multi=True) if "intentions" in config else []
 
+        gap_timeout = config.get_int("gap_timeout") / 1000 if "gap_timeout" in config else 0
+
         return cls(mic_topic, text_input_topic, game_input_topic, game_state_topic, output_topic, annotation_topic,
-                   intention_topic, desire_topic, intentions,
-                   manager, emissor_client, event_bus, resource_manager)
+                   intention_topic, desire_topic, intentions, gap_timeout, manager, emissor_client, event_bus, resource_manager)
 
     def __init__(self, mic_topic: str, text_input_topic: str, game_input_topic: str, game_state_topic: str,
                  output_topic: str, annotation_topic: str, intention_topic: str, desire_topic: str, intentions: List[str],
-                 manager: DialogManager, emissor_client: EmissorDataClient,
+                 gap_timeout: float, manager: DialogManager, emissor_client: EmissorDataClient,
                  event_bus: EventBus, resource_manager: ResourceManager):
         self._manager = manager
 
@@ -68,6 +70,10 @@ class SpotDialogService:
 
         self._ignore_utterances = False if mic_topic else None
 
+        self._gap_timeout = gap_timeout
+        self._utterance_cache = []
+        self._response_cache = None
+
     @property
     def app(self):
         return None
@@ -81,7 +87,7 @@ class SpotDialogService:
                                          provides=[self._output_topic, self._game_state_topic],
                                          intention_topic=self._intention_topic, intentions=self._intentions,
                                          resource_manager=self._resource_manager, processor=self._process,
-                                         buffer_size=16, name=self.__class__.__name__)
+                                         scheduled= self._gap_timeout, buffer_size=16, name=self.__class__.__name__)
         self._topic_worker.start().wait()
 
     def stop(self):
@@ -93,6 +99,14 @@ class SpotDialogService:
         self._topic_worker = None
 
     def _process(self, event: Event[Union[TextSignalEvent, AudioSignalStarted, SignalEvent[GameEvent]]]):
+        if not event:
+            # Reached wait-timeout for utterance continuation
+            if self._response_cache:
+                self._send_reply(self._response_cache, None, None)
+            self._utterance_cache = []
+            self._response_cache = None
+            return
+
         if event.metadata.topic == self._game_input_topic:
             response, state, input, annotations = self._manager.game_event(event.payload.signal.value)
             self._send_reply(response, state, input)
@@ -106,30 +120,47 @@ class SpotDialogService:
         elif event.metadata.topic == self._text_input_topic and not self._ignore_utterances:
             # Ignore events until utterance is handled
             self._set_ignore_utterances()
-            response, state, input, annotations = self._manager.utterance(event.payload.signal.text)
-            self._send_reply(response, state, input)
+            utterance = "" if not self._utterance_cache else " ".join(self._utterance_cache)
+            utterance += event.payload.signal.text
+            response, state, input, annotations = self._manager.utterance(utterance)
+
+            if (state.disambiguation_result and state.disambiguation_result.status in
+                    [DisambiguatorStatus.NO_MATCH, DisambiguatorStatus.MATCH_MULTIPLE]):
+                self._send_reply(None, state, input)
+                text = event.payload.signal.text
+                logger.info("Cached utterance: %s and response: %s", text, response)
+                self._utterance_cache.append(text)
+                self._response_cache = response
+                self._set_ignore_utterances(False)
+            else:
+                self._send_reply(response, state, input)
+                self._utterance_cache = []
+                self._response_cache = None
+
             if annotations:
                 self._send_annotations(event.payload.signal, annotations)
         else:
             logger.info("Ignored event %s (ignore utterances: %s)", event, self._ignore_utterances)
 
     def _send_reply(self, response: str, state: State, input: Input):
-        if not response:
+        if not response and not state:
             return
 
         scenario_id = self._emissor_client.get_current_scenario_id()
-        signal = TextSignal.for_scenario(scenario_id, timestamp_now(), timestamp_now(), None, response)
-        signal_event = TextSignalEvent.for_agent(signal)
-        self._event_bus.publish(self._output_topic, Event.for_payload(signal_event))
+        if response:
+            signal = TextSignal.for_scenario(scenario_id, timestamp_now(), timestamp_now(), None, response)
+            signal_event = TextSignalEvent.for_agent(signal)
+            self._event_bus.publish(self._output_topic, Event.for_payload(signal_event))
 
-        event = GameEvent(participant_id=self._manager._participant_id, round=str(state.round),
-                          state=state.conv_state.name, input=input.name)
-        game_signal = GameSignal.for_scenario(scenario_id, timestamp_now(), event)
-        game_signal_event = SignalEvent(class_type(GameSignal), Modality.VIDEO, game_signal)
-        self._event_bus.publish(self._game_state_topic, Event.for_payload(game_signal_event))
+        if state:
+            event = GameEvent(participant_id=self._manager._participant_id, round=str(state.round),
+                              state=state.conv_state.name, input=input.name)
+            game_signal = GameSignal.for_scenario(scenario_id, timestamp_now(), event)
+            game_signal_event = SignalEvent(class_type(GameSignal), Modality.VIDEO, game_signal)
+            self._event_bus.publish(self._game_state_topic, Event.for_payload(game_signal_event))
 
-        if ConvState.GAME_FINISH == state.conv_state:
-            self._event_bus.publish(self._desire_topic, Event.for_payload(DesireEvent(['quit'])))
+            if ConvState.GAME_FINISH == state.conv_state:
+                self._event_bus.publish(self._desire_topic, Event.for_payload(DesireEvent(['quit'])))
 
     def _send_annotations(self, signal: TextSignal, annotations):
         annotations = [Annotation(type=class_type(val), value=val, source=class_source(self), timestamp=timestamp_now())
