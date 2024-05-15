@@ -2,8 +2,8 @@ import logging
 import uuid
 from typing import List, Union
 
-from cltl.combot.event.emissor import TextSignalEvent, AudioSignalStarted, SignalEvent, AnnotationEvent
 from cltl.combot.event.bdi import DesireEvent
+from cltl.combot.event.emissor import TextSignalEvent, AudioSignalStarted, SignalEvent
 from cltl.combot.infra.config import ConfigurationManager
 from cltl.combot.infra.event import Event, EventBus
 from cltl.combot.infra.resource import ResourceManager
@@ -13,7 +13,6 @@ from cltl_service.emissordata.client import EmissorDataClient
 from emissor.representation.scenario import TextSignal, Modality, class_type, Annotation, class_source, Mention
 
 from spot.dialog.dialog_manager import DialogManager, State, ConvState, Input
-from spot.pragmatic_model.model_ambiguity import DisambiguatorStatus
 from spot_service.dialog.api import GameSignal, GameEvent, SpotterAnnotationEvent
 
 logger = logging.getLogger(__name__)
@@ -103,6 +102,7 @@ class SpotDialogService:
             # Reached wait-timeout for utterance continuation
             if self._response_cache:
                 logger.debug("Responded after timeout: %s", self._response_cache)
+                self._manager.commit()
                 self._send_reply(self._response_cache, None, None)
             self._utterance_cache = []
             self._response_cache = None
@@ -124,12 +124,11 @@ class SpotDialogService:
             utterance = "" if not self._utterance_cache else " ".join(self._utterance_cache)
             utterance += " " if utterance else ""
             utterance += event.payload.signal.text
-            response, state, input, annotations = self._manager.utterance(utterance)
+            response, state, input, annotations, await_continuation = self._manager.utterance(utterance)
 
             logger.debug("Result from disambiguation of '%s': %s, %s, %s, %s", utterance, response, state, input, annotations)
 
-            if (annotations and annotations[-1].status in
-                    [DisambiguatorStatus.NO_MATCH.name, DisambiguatorStatus.MATCH_MULTIPLE.name]):
+            if await_continuation:
                 self._send_reply(None, state, input)
                 text = event.payload.signal.text
                 logger.debug("Cached utterance: %s and response: %s", text, response)
