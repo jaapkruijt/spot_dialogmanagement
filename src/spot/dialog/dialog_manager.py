@@ -122,6 +122,7 @@ class DialogManager:
         self._rounds = rounds
         self._questionaire_rounds = questionnaires
         self.high_engagement = high_engagement
+        self.attempt_counter = 0
 
         self._participant_id = None
         self._participant_name = None
@@ -363,7 +364,16 @@ class DialogManager:
         else:
             raise ValueError(f"Illegal state for disambiguator status: {self._disambiguator.status()}")
 
-        next_state = state.transition(ConvState.DISAMBIGUATION, utterance=None, mention=None, disambiguation_result=None)
+        self.attempt_counter += 1
+        if self.attempt_counter > 3:
+            position = state.position + 1
+            if position < 6:
+                self._disambiguator.advance_position()
+            action = Action(self._get_phrase("SKIP_CHARACTER_PHRASES"))
+            next_state = state.transition(ConvState.QUERY_NEXT if position <= self._positions else ConvState.ROUND_FINISH,
+                position=position, utterance=None, mention=None, disambiguation_result=None, confirmation=None)
+        else:
+            next_state = state.transition(ConvState.DISAMBIGUATION, utterance=None, mention=None, disambiguation_result=None)
 
         return action, next_state
 
