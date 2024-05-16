@@ -168,7 +168,8 @@ class DialogManager:
                     reply += " \\pau=1000\\" + action.reply
                 else:
                     reply = action.reply
-            logger.debug("Transition from %s to %s", self._format_state(self._state), self._format_state(next_state))
+            logger.debug("Transition from %s to %s (reply: %s, wait: %s)", self._format_state(self._state),
+                         self._format_state(next_state), reply, action.await_input)
             self._state = next_state
 
         # TODO Clear utterance and mention and anything else
@@ -307,20 +308,20 @@ class DialogManager:
             disambiguation_result = self._disambiguator.disambiguate(state.mention, force_commit=False)
             selected = disambiguation_result[0]
             certainty = disambiguation_result[1]
+            await_continuation = disambiguation_result[4]
             status = self._disambiguator.status()
             annotation = DisambigutionResult(selected=selected, certainty=certainty, status=status)
 
+            action = Action()
             if DisambiguatorStatus.SUCCESS_HIGH.name == status:
-                action = Action()
                 next_state = state.transition(ConvState.ACKNOWLEDGE, disambiguation_result=disambiguation_result, confirmation=ConfirmationState.ACCEPTED)
             elif DisambiguatorStatus.SUCCESS_LOW.name == status:
-                action = Action()
                 next_state = state.transition(ConvState.ACKNOWLEDGE,  disambiguation_result=disambiguation_result, confirmation=ConfirmationState.CONFIRM)
             else:
-                action = Action()
                 next_state = state.transition(ConvState.REPAIR, disambiguation_result=disambiguation_result)
 
             if await_continuation:
+                action = Action(await_input=Input.REPLY)
                 self.uncommitted_state = next_state
                 next_state = state.transition(state.conv_state, disambiguation_result=disambiguation_result)
         else:

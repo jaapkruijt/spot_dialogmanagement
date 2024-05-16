@@ -109,7 +109,7 @@ class SpotDialogService:
             return
 
         if event.metadata.topic == self._game_input_topic:
-            response, state, input, annotations = self._manager.game_event(event.payload.signal.value)
+            response, state, input, annotations, await_input = self._manager.game_event(event.payload.signal.value)
             self._send_reply(response, state, input)
             logger.info("Handled game event %s", event.payload.signal.value)
         elif event.metadata.topic == self._mic_topic:
