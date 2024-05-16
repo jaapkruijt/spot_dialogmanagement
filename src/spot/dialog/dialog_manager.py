@@ -42,7 +42,7 @@ class ConvState(Enum):
             ConvState.ROUND_START: [ConvState.QUERY_NEXT],
             ConvState.QUERY_NEXT: [ConvState.QUERY_NEXT, ConvState.DISAMBIGUATION],
             ConvState.DISAMBIGUATION: [ConvState.DISAMBIGUATION, ConvState.REPAIR, ConvState.ACKNOWLEDGE],
-            ConvState.REPAIR: [ConvState.REPAIR, ConvState.DISAMBIGUATION],
+            ConvState.REPAIR: [ConvState.REPAIR, ConvState.DISAMBIGUATION, ConvState.QUERY_NEXT],
             ConvState.ACKNOWLEDGE: [ConvState.ACKNOWLEDGE, ConvState.QUERY_NEXT, ConvState.ROUND_FINISH],
             ConvState.ROUND_FINISH: [ConvState.QUESTIONNAIRE, ConvState.ROUND_START, ConvState.ROUND_FINISH, ConvState.OUTRO],
             ConvState.OUTRO: [ConvState.OUTRO, ConvState.GAME_FINISH],
@@ -68,6 +68,7 @@ class State:
     utterance: Optional[str] = None
     mention: Optional[str] = None
     disambiguation_result: Optional[Any] = None
+    attempt_counter: int = 0
     confirmation: Optional[ConfirmationState] = None
 
     def transition(self, conv_state: ConvState, **kwargs):
@@ -122,7 +123,6 @@ class DialogManager:
         self._rounds = rounds
         self._questionaire_rounds = questionnaires
         self.high_engagement = high_engagement
-        self.attempt_counter = 0
 
         self._participant_id = None
         self._participant_name = None
@@ -149,9 +149,13 @@ class DialogManager:
         return self.run(utterance, None)
 
     def commit(self):
+        if not self._uncommitted_state:
+            raise ValueError()
+
         self._disambiguator.commit_status()
         self._state = self._uncommitted_state
         self._uncommitted_state = None
+        return self.run(None, None)
 
     def run(self, utterance, game_transition):
         action = Action()
@@ -172,8 +176,10 @@ class DialogManager:
                          self._format_state(next_state), reply, action.await_input)
             self._state = next_state
 
-        # TODO Clear utterance and mention and anything else
-        self._state = next_state.transition(self._state.conv_state, utterance=None, mention=None)
+        if await_continuation:
+            self._state = next_state.transition(self._state.conv_state)
+        else:
+            self._state = next_state.transition(self._state.conv_state, utterance=None, mention=None)
 
         return reply, self._state, action.await_input, annotations, await_continuation
 
@@ -289,7 +295,7 @@ class DialogManager:
         # if coming from repair
         else:
             action = Action(self._get_phrase("QUERY_NEXT_REPAIR_PHRASES").format_map({"position": state.position}), Input.REPLY)
-        next_state = state.transition(ConvState.DISAMBIGUATION)
+        next_state = state.transition(ConvState.DISAMBIGUATION, attempt_counter=0)
 
         return action, next_state
 
@@ -322,7 +328,7 @@ class DialogManager:
 
             if await_continuation:
                 action = Action(await_input=Input.REPLY)
-                self.uncommitted_state = next_state
+                self._uncommitted_state = next_state
                 next_state = state.transition(state.conv_state, disambiguation_result=disambiguation_result)
         else:
             action = Action(await_input=Input.REPLY)
@@ -379,16 +385,16 @@ class DialogManager:
         else:
             raise ValueError(f"Illegal state for disambiguator status: {self._disambiguator.status()}")
 
-        self.attempt_counter += 1
-        if self.attempt_counter > 3:
+        if state.attempt_counter > 3:
             position = state.position + 1
             if position < 6:
-                self._disambiguator.advance_position()
+                self._disambiguator.advance_position(skip=True)
             action = Action(self._get_phrase("SKIP_CHARACTER_PHRASES"))
             next_state = state.transition(ConvState.QUERY_NEXT if position <= self._positions else ConvState.ROUND_FINISH,
                 position=position, utterance=None, mention=None, disambiguation_result=None, confirmation=None)
         else:
-            next_state = state.transition(ConvState.DISAMBIGUATION, utterance=None, mention=None, disambiguation_result=None)
+            next_state = state.transition(ConvState.DISAMBIGUATION, utterance=None, mention=None,
+                                          disambiguation_result=None, attempt_counter=state.attempt_counter + 1)
 
         return action, next_state
 
@@ -495,7 +501,7 @@ class DialogManager:
         return utterance
 
     def _acknowledge(self, state, confirm):
-        selected, certainty, position, description = state.disambiguation_result
+        selected, certainty, position, description, await_continuation = state.disambiguation_result
         # TODO Find the mention the human used for the character (see mention detection ;)
         # or unique attributes of the character
         # ref_string = f"{selected} in position {position}"

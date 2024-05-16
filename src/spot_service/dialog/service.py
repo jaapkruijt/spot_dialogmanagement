@@ -71,7 +71,6 @@ class SpotDialogService:
 
         self._gap_timeout = gap_timeout
         self._utterance_cache = []
-        self._response_cache = None
 
     @property
     def app(self):
@@ -100,12 +99,11 @@ class SpotDialogService:
     def _process(self, event: Event[Union[TextSignalEvent, AudioSignalStarted, SignalEvent[GameEvent]]]):
         if not event:
             # Reached wait-timeout for utterance continuation
-            if self._response_cache:
-                logger.debug("Responded after timeout: %s", self._response_cache)
-                self._manager.commit()
-                self._send_reply(self._response_cache, None, None)
+            if self._utterance_cache:
+                logger.debug("Responded after timeout: %s", self._utterance_cache)
+                response, state, input, annotations, await_continuation = self._manager.commit()
+                self._send_reply(response, state, input)
             self._utterance_cache = []
-            self._response_cache = None
             return
 
         if event.metadata.topic == self._game_input_topic:
@@ -133,13 +131,11 @@ class SpotDialogService:
                 text = event.payload.signal.text
                 logger.debug("Cached utterance: %s and response: %s", text, response)
                 self._utterance_cache.append(text)
-                self._response_cache = response
                 self._set_ignore_utterances(False)
             else:
                 logger.debug("Resonded: %s", response)
                 self._send_reply(response, state, input)
                 self._utterance_cache = []
-                self._response_cache = None
 
             if annotations:
                 self._send_annotations(event.payload.signal, annotations)
