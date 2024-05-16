@@ -385,7 +385,9 @@ class DialogManager:
         else:
             raise ValueError(f"Illegal state for disambiguator status: {self._disambiguator.status()}")
 
-        if state.attempt_counter > 3:
+        # TODOc
+        # if state.attempt_counter > 3:
+        if False:
             position = state.position + 1
             if position < 6:
                 self._disambiguator.advance_position(skip=True)
