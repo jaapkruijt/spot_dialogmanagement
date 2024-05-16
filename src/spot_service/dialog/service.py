@@ -1,5 +1,6 @@
 import logging
 import uuid
+from string import punctuation
 from typing import List, Union
 
 from cltl.combot.event.bdi import DesireEvent
@@ -130,7 +131,7 @@ class SpotDialogService:
                 self._send_reply(None, state, input)
                 text = event.payload.signal.text
                 logger.debug("Cached utterance: %s and response: %s", text, response)
-                self._utterance_cache.append(text)
+                self._utterance_cache.append(text.strip(punctuation))
                 self._set_ignore_utterances(False)
             else:
                 logger.debug("Resonded: %s", response)

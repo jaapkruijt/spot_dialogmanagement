@@ -329,7 +329,8 @@ class DialogManager:
             if await_continuation:
                 action = Action(await_input=Input.REPLY)
                 self._uncommitted_state = next_state
-                next_state = state.transition(state.conv_state, disambiguation_result=disambiguation_result)
+                next_state = state.transition(state.conv_state, disambiguation_result=disambiguation_result,
+                                              utterance=None, mention=None)
         else:
             action = Action(await_input=Input.REPLY)
             next_state = state
