@@ -68,7 +68,7 @@ class State:
     utterance: Optional[str] = None
     mention: Optional[str] = None
     disambiguation_result: Optional[Any] = None
-    attempt_counter: int = 0
+    attempt_counter: int = 1
     confirmation: Optional[ConfirmationState] = None
 
     def transition(self, conv_state: ConvState, **kwargs):
@@ -295,7 +295,7 @@ class DialogManager:
         # if coming from repair
         else:
             action = Action(self._get_phrase("QUERY_NEXT_REPAIR_PHRASES").format_map({"position": state.position}), Input.REPLY)
-        next_state = state.transition(ConvState.DISAMBIGUATION, attempt_counter=0)
+        next_state = state.transition(ConvState.DISAMBIGUATION, attempt_counter=1)
 
         return action, next_state
 
@@ -385,9 +385,7 @@ class DialogManager:
         else:
             raise ValueError(f"Illegal state for disambiguator status: {self._disambiguator.status()}")
 
-        # TODOc
-        # if state.attempt_counter > 3:
-        if False:
+        if state.attempt_counter > 3:
             position = state.position + 1
             if position < 6:
                 self._disambiguator.advance_position(skip=True)
