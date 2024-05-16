@@ -291,7 +291,7 @@ class DialogManager:
             if 1 == state.position:
                 action = Action(self._get_phrase("QUERY_NEXT_POS_1_PHRASES"), await_input=Input.REPLY)
             else:
-                action = Action(self._get_phrase("QUERY_NEXT_PHRASES"), Input.REPLY)
+                action = Action(self._get_phrase("QUERY_NEXT_PHRASES").format_map({"position": state.position}), Input.REPLY)
         # if coming from repair
         else:
             action = Action(self._get_phrase("QUERY_NEXT_REPAIR_PHRASES").format_map({"position": state.position}), Input.REPLY)
