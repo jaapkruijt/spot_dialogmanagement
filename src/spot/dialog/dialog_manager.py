@@ -292,10 +292,11 @@ class DialogManager:
                 action = Action(self._get_phrase("QUERY_NEXT_POS_1_PHRASES"), await_input=Input.REPLY)
             else:
                 action = Action(self._get_phrase("QUERY_NEXT_PHRASES").format_map({"position": state.position}), Input.REPLY)
+            next_state = state.transition(ConvState.DISAMBIGUATION, attempt_counter=1)
         # if coming from repair
         else:
             action = Action(self._get_phrase("QUERY_NEXT_REPAIR_PHRASES").format_map({"position": state.position}), Input.REPLY)
-        next_state = state.transition(ConvState.DISAMBIGUATION, attempt_counter=1)
+            next_state = state.transition(ConvState.DISAMBIGUATION)
 
         return action, next_state
 
@@ -361,9 +362,19 @@ class DialogManager:
                 action = Action()
                 next_state = state.transition(state.conv_state, confirmation=ConfirmationState.ACCEPTED)
             elif re.search(r"\bnee\b", utterance.lower()):
-                action = Action(self._get_phrase("ACKNOWLEDGE_NEE_PHRASES"))
-                # Restart, but stay in the same position
-                next_state = state.transition(ConvState.QUERY_NEXT, utterance=None, mention=None, disambiguation_result=None, confirmation=None)
+                if state.attempt_counter > 3:
+                    position = state.position + 1
+                    if position < 6:
+                        self._disambiguator.advance_position(skip=True)
+                    action = Action(self._get_phrase("SKIP_CHARACTER_PHRASES"))
+                    next_state = state.transition(
+                        ConvState.QUERY_NEXT if position <= self._positions else ConvState.ROUND_FINISH,
+                        position=position, utterance=None, mention=None, disambiguation_result=None, confirmation=None)
+                else:
+                    action = Action(self._get_phrase("ACKNOWLEDGE_NEE_PHRASES"))
+                    # Restart, but stay in the same position
+                    next_state = state.transition(ConvState.QUERY_NEXT, utterance=None, mention=None, disambiguation_result=None, confirmation=None,
+                                              attempt_counter=state.attempt_counter + 1)
             else:
                 action = Action(self._get_phrase("ACKNOWLEDGE_FAILED_PHRASES"), await_input=Input.REPLY)
                 next_state = state
@@ -376,7 +387,6 @@ class DialogManager:
         if DisambiguatorStatus.NO_MATCH.name == self._disambiguator.status():
             action = Action(self._get_phrase("NO_MATCH_PHRASES"), await_input=Input.REPLY)
         elif DisambiguatorStatus.NEG_RESPONSE.name == self._disambiguator.status():
-            # TODO not sure if this is way to go
             action = Action(self._get_phrase("REPAIR_NEG_RESPONSE_PHRASES"), await_input=Input.REPLY)
         elif DisambiguatorStatus.MATCH_PREVIOUS.name == self._disambiguator.status():
             action = Action(self._get_phrase("MATCH_PREVIOUS_PHRASES"), await_input=Input.REPLY)
