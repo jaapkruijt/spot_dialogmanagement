@@ -219,7 +219,7 @@ class DialogManager:
         if game_transition:
             self._participant_id = game_transition.participant_id
             self._participant_name = game_transition.participant_name
-            if self._session in ['2', '3']:
+            if self._session in [2, 3]:
                 self.load_interaction()
             logger.info("Start game for %s", self._participant_id)
             action = Action()
