@@ -437,11 +437,17 @@ class DialogManager:
             next_state = state.transition(ConvState.GAME_FINISH, outro=None, utterance=None)
         elif state.outro is None:
             action = Action()
-            next_state = state.transition(ConvState.OUTRO, outro=OutroStep(statements=self._get_phrases("outro")))
+            next_state = state.transition(ConvState.OUTRO, outro=OutroStep(statements=self._get_phrases("outro")),
+                                          attempt_counter=1)
         elif state.outro.store_input and not state.utterance:
             if utterance:
-                self.save_preferences(utterance)
-                return Action(), state.transition(ConvState.OUTRO, utterance=utterance)
+                preference = self.parse_preference(utterance)
+                if preference or state.attempt_counter > 2:
+                    self.save_preferences(utterance, preference)
+                    return Action(), state.transition(ConvState.OUTRO, utterance=utterance)
+                else:
+                    return (Action(reply=self._get_phrase("NO_MATCH_PHRASES"), await_input=Input.REPLY),
+                            state.transition(ConvState.OUTRO, attempt_counter=state.attempt_counter + 1))
             else:
                 # No response, wait..
                 return Action(await_input=Input.REPLY), state
@@ -462,7 +468,14 @@ class DialogManager:
 
         return action, state
 
-    def save_preferences(self, utterance):
+    def parse_preference(self, utterance):
+        expected_reg = re.compile("|".join(pref.lower() for pref in self._preferences[str(self._session)]))
+        preferences = {p for p in expected_reg.findall(utterance.lower())}
+        preference = next(iter(preferences)) if len(preferences) == 1 else ""
+
+        return preference
+
+    def save_preferences(self, utterance, preference):
         if not self._storage_path:
             return
 
@@ -473,9 +486,6 @@ class DialogManager:
         except:
             data = {}
 
-        expected_reg = re.compile("|".join(pref.lower() for pref in self._preferences[str(self._session)]))
-        preferences = {p for p in expected_reg.findall(utterance.lower())}
-        preference = next(iter(preferences)) if len(preferences) == 1 else ""
         data["answer"] = utterance
         data["preference"] = preference
 
