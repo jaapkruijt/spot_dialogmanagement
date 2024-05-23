@@ -42,7 +42,7 @@ class ConvState(Enum):
             ConvState.ROUND_START: [ConvState.QUERY_NEXT],
             ConvState.QUERY_NEXT: [ConvState.QUERY_NEXT, ConvState.DISAMBIGUATION],
             ConvState.DISAMBIGUATION: [ConvState.DISAMBIGUATION, ConvState.REPAIR, ConvState.ACKNOWLEDGE],
-            ConvState.REPAIR: [ConvState.REPAIR, ConvState.DISAMBIGUATION, ConvState.QUERY_NEXT],
+            ConvState.REPAIR: [ConvState.REPAIR, ConvState.DISAMBIGUATION, ConvState.QUERY_NEXT, ConvState.ROUND_FINISH],
             ConvState.ACKNOWLEDGE: [ConvState.ACKNOWLEDGE, ConvState.QUERY_NEXT, ConvState.ROUND_FINISH],
             ConvState.ROUND_FINISH: [ConvState.QUESTIONNAIRE, ConvState.ROUND_START, ConvState.ROUND_FINISH, ConvState.OUTRO],
             ConvState.OUTRO: [ConvState.OUTRO, ConvState.GAME_FINISH],
@@ -152,9 +152,11 @@ class DialogManager:
         if not self._uncommitted_state:
             raise ValueError()
 
+        logger.debug("Commit state: %s", self._uncommitted_state)
         self._disambiguator.commit_status()
         self._state = self._uncommitted_state
         self._uncommitted_state = None
+
         return self.run(None, None)
 
     def run(self, utterance, game_transition):
@@ -172,8 +174,8 @@ class DialogManager:
                     reply += " \\pau=1000\\" + action.reply
                 else:
                     reply = action.reply
-            logger.debug("Transition from %s to %s (reply: %s, wait: %s)", self._format_state(self._state),
-                         self._format_state(next_state), reply, action.await_input)
+            logger.debug("Transition from %s to %s (reply: %s, wait: %s, uncommitted: %s)", self._format_state(self._state),
+                         self._format_state(next_state), reply, action.await_input, self._uncommitted_state)
             self._state = next_state
 
         if await_continuation:

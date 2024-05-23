@@ -101,8 +101,8 @@ class SpotDialogService:
         if not event:
             # Reached wait-timeout for utterance continuation
             if self._utterance_cache:
-                logger.debug("Responded after timeout: %s", self._utterance_cache)
                 response, state, input, annotations, await_continuation = self._manager.commit()
+                logger.debug("Responded after timeout (%s): %s", self._utterance_cache, response)
                 self._send_reply(response, state, input)
             self._utterance_cache = []
             return
