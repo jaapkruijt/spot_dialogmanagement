@@ -318,7 +318,7 @@ class DialogManager:
             selected = disambiguation_result[0]
             certainty = disambiguation_result[1]
             await_continuation = disambiguation_result[4]
-            status = self._disambiguator.status()
+            status = self._disambiguator.status(uncommitted=await_continuation)
             annotation = DisambigutionResult(selected=selected, certainty=certainty, status=status)
 
             action = Action()
@@ -413,6 +413,7 @@ class DialogManager:
 
     def _act_round_finished(self, game_transition, state):
         if game_transition:
+            self.save_interaction()
             action = Action()
             next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.OUTRO)
         elif state.round not in self._questionaire_rounds and state.conv_state != ConvState.QUESTIONNAIRE:
