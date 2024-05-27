@@ -425,7 +425,7 @@ class DialogManager:
                 reply = self._get_phrase("FINISH_ROUND_1_PHRASES")
             else:
                 reply = self._get_phrase("FINISH_ROUND_PHRASES")
-            action = Action(reply, await_input=Input.GAME)
+            action = Action(reply.format_map({"name": self.participant_name}), await_input=Input.GAME)
             next_state = state.transition(ConvState.QUESTIONNAIRE)
         else:
             action = Action(await_input=Input.GAME)
