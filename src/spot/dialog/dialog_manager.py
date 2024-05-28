@@ -360,7 +360,9 @@ class DialogManager:
             action = Action(reply, await_input=Input.REPLY)
             next_state = state.transition(state.conv_state, confirmation=ConfirmationState.REQUESTED)
         elif ConfirmationState.REQUESTED == state.confirmation:
-            if re.search(r"\bja\b", utterance.lower()):
+            if 'Ok' in utterance:
+                return Action(await_input=Input.REPLY), state
+            elif re.search(r"\bja\b", utterance.lower()):
                 action = Action()
                 next_state = state.transition(state.conv_state, confirmation=ConfirmationState.ACCEPTED)
             elif re.search(r"\bnee\b", utterance.lower()):
