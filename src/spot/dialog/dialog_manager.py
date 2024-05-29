@@ -361,6 +361,7 @@ class DialogManager:
             next_state = state.transition(state.conv_state, confirmation=ConfirmationState.REQUESTED)
         elif ConfirmationState.REQUESTED == state.confirmation:
             if 'Ok' in utterance:
+                logger.debug("Ignore Ok during acknowledge")
                 return Action(await_input=Input.REPLY), state
             elif re.search(r"\bja\b", utterance.lower()):
                 action = Action()

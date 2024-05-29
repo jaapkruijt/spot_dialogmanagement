@@ -140,6 +140,9 @@ class SpotDialogService:
 
             if annotations:
                 self._send_annotations(event.payload.signal, annotations)
+
+            if not response and input == Input.REPLY:
+                self._set_ignore_utterances(False)
         else:
             logger.info("Ignored event %s (ignore utterances: %s)", event, self._ignore_utterances)
 
