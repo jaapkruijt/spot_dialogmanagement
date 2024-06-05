@@ -140,6 +140,10 @@ class DialogManager:
     def participant_name(self):
         return self._participant_name
 
+    @property
+    def interaction(self):
+        return self._session
+
     def game_event(self, event):
         logger.debug("Input (Game): %s", event)
         return self.run(None, event)
