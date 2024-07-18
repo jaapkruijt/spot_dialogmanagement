@@ -124,6 +124,9 @@ class DialogManager:
         self._questionaire_rounds = questionnaires
         self.high_engagement = high_engagement
 
+        self.yes = self._get_phrase("YES_REGEX")
+        self.no = self._get_phrase("NO_REGEX")
+
         self._participant_id = None
         self._participant_name = None
 
@@ -363,10 +366,10 @@ class DialogManager:
             if 'Ok' in utterance:
                 logger.debug("Ignore Ok during acknowledge")
                 return Action(await_input=Input.REPLY), state
-            elif re.search(r"\bja\b", utterance.lower()):
+            elif re.search(rf"{self.yes}", utterance.lower()):
                 action = Action()
                 next_state = state.transition(state.conv_state, confirmation=ConfirmationState.ACCEPTED)
-            elif re.search(r"\bnee\b", utterance.lower()):
+            elif re.search(rf"{self.no}", utterance.lower()):
                 if state.attempt_counter > 3:
                     position = state.position + 1
                     if position < 6:
@@ -545,9 +548,9 @@ class DialogManager:
                     response = self._get_phrase("ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES").format_map({"position": position}) % description
             else:
                 if position == state.position:
-                    response = self._get_phrase("ACKNOWLEDGE_SAME_POSITION_PHRASES").format_map({"position": position}) % "die"
+                    response = self._get_phrase("ACKNOWLEDGE_SAME_POSITION_PHRASES").format_map({"position": position}) % self._get_phrase("SIMPLE_DEICTIC")
                 else:
-                    response = self._get_phrase("ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES").format_map({"position": position}) % "die"
+                    response = self._get_phrase("ACKNOWLEDGE_DIFFERENT_POSITION_PHRASES").format_map({"position": position}) % self._get_phrase("SIMPLE_DEICTIC")
             if int(self._session) == 1 and state.round == 1:
                 response = response + " " + self._get_phrase("ACKNOWLEDGE_HINT_ROUND_1_PHRASES")
             if random.random() < self._encouragement_chance:
