@@ -70,6 +70,7 @@ class State:
     disambiguation_result: Optional[Any] = None
     attempt_counter: int = 1
     confirmation: Optional[ConfirmationState] = None
+    transaction_unit: int = 0
 
     def transition(self, conv_state: ConvState, **kwargs):
         if conv_state not in self.conv_state.transitions():
@@ -284,7 +285,7 @@ class DialogManager:
             action = Action(self._get_phrase("START_ROUND_1_PHRASES"))
         else:
             action = Action(self._get_phrase("START_ROUND_PHRASES"))
-        next_state = state.transition(ConvState.QUERY_NEXT, round=game_round, position=1, utterance=None,
+        next_state = state.transition(ConvState.QUERY_NEXT, round=game_round, position=1, transaction_unit=1, utterance=None,
                                       mention=None, disambiguation_result=None, confirmation=None)
 
         return action, next_state
@@ -352,12 +353,14 @@ class DialogManager:
             # self._disambiguator.confirm_character_position(selected, state.mention)
             # logging.debug("State mention: %s", state.mention)
             position = state.position + 1
+            transaction_unit = state.transaction_unit + 1
             if position < 6:
                 self._disambiguator.advance_position()
 
             next_state = state.transition(
                 ConvState.QUERY_NEXT if position <= self._positions else ConvState.ROUND_FINISH,
-                position=position, utterance=None, mention=None, disambiguation_result=None, confirmation=None)
+                position=position, transaction_unit=transaction_unit, utterance=None, mention=None,
+                disambiguation_result=None, confirmation=None)
         elif ConfirmationState.CONFIRM == state.confirmation:
             reply = self._acknowledge(state, confirm=True)
             action = Action(reply, await_input=Input.REPLY)

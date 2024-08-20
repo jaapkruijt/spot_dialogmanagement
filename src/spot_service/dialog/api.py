@@ -25,6 +25,9 @@ class GameEvent:
     round: Optional[str] = None
     state: Optional[str] = None
     input: Optional[str] = None
+    position: Optional[int] = None
+    transaction_unit: Optional[int] = None
+
 
 
 @emissor_dataclass
