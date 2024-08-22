@@ -15,5 +15,6 @@ docker:
 spacy.lock:
 	source venv/bin/activate; \
 	    python -m spacy download nl_core_news_lg; \
+	    python -m spacy download en_core_web_lg; \
 		deactivate
 	touch spacy.lock
