@@ -63,6 +63,7 @@ class State:
     game_start: Optional[GameStartStep] = None
     intro: Optional[IntroStep] = None
     outro: Optional[OutroStep] = None
+    page_id = None
     round: int = 0
     position: int = 0
     utterance: Optional[str] = None
@@ -146,6 +147,12 @@ class DialogManager:
 
     def game_event(self, event):
         logger.debug("Input (Game): %s", event)
+
+        if event.round and self._state.page_id and self._state.page_id == event.round:
+            # This is not a game transition
+            logger.info("Ignore page reload (event: %s, state: %s)", event, self._state)
+            return None, self._state, None, None, None
+
         return self.run(None, event)
 
     def utterance(self, utterance: str):
@@ -183,9 +190,12 @@ class DialogManager:
             self._state = next_state
 
         if await_continuation:
-            self._state = next_state.transition(self._state.conv_state)
+            self._state = self._state.transition(self._state.conv_state)
         else:
-            self._state = next_state.transition(self._state.conv_state, utterance=None, mention=None)
+            self._state = self._state.transition(self._state.conv_state, utterance=None, mention=None)
+
+        if game_transition and game_transition.round:
+            self._state = self._state.transition(self._state.conv_state, page_id=game_transition.round)
 
         return reply, self._state, action.await_input, annotations, await_continuation
 
