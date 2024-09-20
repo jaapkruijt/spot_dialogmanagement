@@ -63,7 +63,7 @@ class State:
     game_start: Optional[GameStartStep] = None
     intro: Optional[IntroStep] = None
     outro: Optional[OutroStep] = None
-    page_id = None
+    page_id: Optional[str] = None
     round: int = 0
     position: int = 0
     utterance: Optional[str] = None
