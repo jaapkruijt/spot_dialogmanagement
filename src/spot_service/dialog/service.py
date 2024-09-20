@@ -159,7 +159,7 @@ class SpotDialogService:
         if state:
             event = GameEvent(participant_id=self._manager._participant_id, round=str(state.round),
                               state=state.conv_state.name, position=state.position,
-                              transaction_unit=state.transaction_unit, input=input.name)
+                              transaction_unit=state.transaction_unit, input=input.name if input else None)
             game_signal = GameSignal.for_scenario(scenario_id, timestamp_now(), event)
             game_signal_event = SignalEvent(class_type(GameSignal), Modality.VIDEO, game_signal)
             self._event_bus.publish(self._game_state_topic, Event.for_payload(game_signal_event))
