@@ -436,7 +436,10 @@ class DialogManager:
             action = Action()
             next_state = state.transition(ConvState.ROUND_START if self.has_next_round(state) else ConvState.OUTRO)
         elif state.round not in self._questionaire_rounds and state.conv_state != ConvState.QUESTIONNAIRE:
-            reply = self._get_phrase("ROUND_FINISH_PHRASES")
+            if not self.has_next_round(state):
+                reply = self._get_phrase("FINISH_ROUND_PHRASES")
+            else:
+                reply = self._get_phrase("ROUND_FINISH_PHRASES")
             action = Action(reply, await_input=Input.GAME if self.has_next_round(state) else None)
             next_state = state.transition(ConvState.QUESTIONNAIRE if self.has_next_round(state) else ConvState.OUTRO)
         elif state.conv_state == ConvState.ROUND_FINISH:
