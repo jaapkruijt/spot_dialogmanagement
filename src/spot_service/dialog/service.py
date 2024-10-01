@@ -101,14 +101,14 @@ class SpotDialogService:
         if not event:
             # Reached wait-timeout for utterance continuation
             if self._utterance_cache:
-                response, state, input, annotations, await_continuation = self._manager.commit()
+                response, state, input, annotations, await_continuation = self._manager.commit(self._game_event_callback())
                 logger.debug("Responded after timeout (%s): %s", self._utterance_cache, response)
                 self._send_reply(response, state, input)
             self._utterance_cache = []
             return
 
         if event.metadata.topic == self._game_input_topic:
-            response, state, input, annotations, await_input = self._manager.game_event(event.payload.signal.value)
+            response, state, input, annotations, await_input = self._manager.game_event(event.payload.signal.value, self._game_event_callback())
             self._send_reply(response, state, input)
             logger.info("Handled game event %s", event.payload.signal.value)
         elif event.metadata.topic == self._mic_topic:
@@ -123,7 +123,7 @@ class SpotDialogService:
             utterance = "" if not self._utterance_cache else " ".join(self._utterance_cache)
             utterance += " " if utterance else ""
             utterance += event.payload.signal.text
-            response, state, input, annotations, await_continuation = self._manager.utterance(utterance)
+            response, state, input, annotations, await_continuation = self._manager.utterance(utterance, self._game_event_callback())
 
             logger.debug("Result from disambiguation of '%s': %s, %s, %s, %s", utterance, response, state, input, annotations)
 
@@ -172,6 +172,27 @@ class SpotDialogService:
                        for val in annotations]
         mention = Mention(uuid.uuid4(), segment=[signal.ruler], annotations=annotations)
         self._event_bus.publish(self._annotation_topic, Event.for_payload(SpotterAnnotationEvent.create([mention])))
+
+    def _game_event_callback(self):
+        def callback(state, next_state, input):
+            if (state.conv_state == next_state.conv_state
+                    and state.round == next_state.round
+                    and state.position == next_state.position
+                    and state.transaction_unit == next_state.transaction_unit):
+                return
+
+            scenario_id = self._emissor_client.get_current_scenario_id()
+
+            event = GameEvent(participant_id=self._manager._participant_id, round=str(state.round),
+                              state=state.conv_state.name, position=state.position,
+                              transaction_unit=state.transaction_unit, input=input.name if input else None)
+            game_signal = GameSignal.for_scenario(scenario_id, timestamp_now(), event)
+            game_signal_event = SignalEvent(class_type(GameSignal), Modality.VIDEO, game_signal)
+            self._event_bus.publish(self._game_state_topic, Event.for_payload(game_signal_event))
+            if ConvState.GAME_FINISH == state.conv_state:
+                self._event_bus.publish(self._desire_topic, Event.for_payload(DesireEvent(['quit'])))
+
+        return callback
 
     def _set_ignore_utterances(self, ignore=True):
         if self._ignore_utterances is None:

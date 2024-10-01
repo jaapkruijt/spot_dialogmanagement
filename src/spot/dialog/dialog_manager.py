@@ -57,7 +57,7 @@ class ConfirmationState(Enum):
     ACCEPTED = auto()
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass(frozen=True)
 class State:
     conv_state: Optional[ConvState] = None
     game_start: Optional[GameStartStep] = None
@@ -145,7 +145,7 @@ class DialogManager:
     def participant_name(self):
         return self._participant_name
 
-    def game_event(self, event):
+    def game_event(self, event, state_callback):
         logger.debug("Input (Game): %s", event)
 
         if event.round and self._state.page_id and self._state.page_id == event.round:
@@ -153,13 +153,13 @@ class DialogManager:
             logger.info("Ignore page reload (event: %s, state: %s)", event, self._state)
             return None, self._state, None, None, None
 
-        return self.run(None, event)
+        return self.run(None, event, state_callback)
 
-    def utterance(self, utterance: str):
+    def utterance(self, utterance: str, state_callback):
         logger.debug("Input: (Text) %s", utterance)
-        return self.run(utterance, None)
+        return self.run(utterance, None, state_callback)
 
-    def commit(self):
+    def commit(self, state_callback):
         if not self._uncommitted_state:
             raise ValueError()
 
@@ -168,9 +168,9 @@ class DialogManager:
         self._state = self._uncommitted_state
         self._uncommitted_state = None
 
-        return self.run(None, None)
+        return self.run(None, None, state_callback)
 
-    def run(self, utterance, game_transition):
+    def run(self, utterance, game_transition, state_callback):
         action = Action()
         reply = ""
         annotations = []
@@ -187,6 +187,7 @@ class DialogManager:
                     reply = action.reply
             logger.debug("Transition from %s to %s (reply: %s, wait: %s, uncommitted: %s)", self._format_state(self._state),
                          self._format_state(next_state), reply, action.await_input, self._uncommitted_state)
+            state_callback(self._state, next_state, action.await_input)
             self._state = next_state
 
         if await_continuation:
@@ -232,7 +233,7 @@ class DialogManager:
         return action, next_state, annotation, await_continuation
 
     def act_game_init(self, game_transition, state):
-        if game_transition:
+        if game_transition and game_transition.participant_id:
             self._participant_id = game_transition.participant_id
             self._participant_name = game_transition.participant_name
             if self._session in [2, 3]:
