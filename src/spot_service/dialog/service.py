@@ -156,16 +156,8 @@ class SpotDialogService:
             signal_event = TextSignalEvent.for_agent(signal)
             self._event_bus.publish(self._output_topic, Event.for_payload(signal_event))
 
-        if state:
-            event = GameEvent(participant_id=self._manager._participant_id, round=str(state.round),
-                              state=state.conv_state.name, position=state.position,
-                              transaction_unit=state.transaction_unit, input=input.name if input else None)
-            game_signal = GameSignal.for_scenario(scenario_id, timestamp_now(), event)
-            game_signal_event = SignalEvent(class_type(GameSignal), Modality.VIDEO, game_signal)
-            self._event_bus.publish(self._game_state_topic, Event.for_payload(game_signal_event))
-
-            if ConvState.GAME_FINISH == state.conv_state:
-                self._event_bus.publish(self._desire_topic, Event.for_payload(DesireEvent(['quit'])))
+        if state and ConvState.GAME_FINISH == state.conv_state:
+            self._event_bus.publish(self._desire_topic, Event.for_payload(DesireEvent(['quit'])))
 
     def _send_annotations(self, signal: TextSignal, annotations):
         annotations = [Annotation(type=class_type(val), value=val, source=class_source(self), timestamp=timestamp_now())
@@ -174,11 +166,11 @@ class SpotDialogService:
         self._event_bus.publish(self._annotation_topic, Event.for_payload(SpotterAnnotationEvent.create([mention])))
 
     def _game_event_callback(self):
-        def callback(state, next_state, input):
-            if (state.conv_state == next_state.conv_state
-                    and state.round == next_state.round
-                    and state.position == next_state.position
-                    and state.transaction_unit == next_state.transaction_unit):
+        def callback(previous_state, state, input):
+            if (previous_state.conv_state == state.conv_state
+                    and previous_state.round == state.round
+                    and previous_state.position == state.position
+                    and previous_state.transaction_unit == state.transaction_unit):
                 return
 
             scenario_id = self._emissor_client.get_current_scenario_id()
@@ -189,8 +181,6 @@ class SpotDialogService:
             game_signal = GameSignal.for_scenario(scenario_id, timestamp_now(), event)
             game_signal_event = SignalEvent(class_type(GameSignal), Modality.VIDEO, game_signal)
             self._event_bus.publish(self._game_state_topic, Event.for_payload(game_signal_event))
-            if ConvState.GAME_FINISH == state.conv_state:
-                self._event_bus.publish(self._desire_topic, Event.for_payload(DesireEvent(['quit'])))
 
         return callback
 
