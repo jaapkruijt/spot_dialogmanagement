@@ -459,8 +459,8 @@ class DialogManager:
     def _act_outro(self, utterance, state):
         if not self._has_conversation("outro"):
             logger.info("Skip outro for session %s", self._session)
-            action = Action()
-            next_state = state.transition(ConvState.GAME_FINISH, outro=None, utterance=None)
+            action = Action(await_input=Input.GAME)
+            next_state = state.transition(ConvState.OUTRO, outro=OutroStep(statements=[], final=True, store_input=False), utterance=None)
         elif state.outro is None:
             action = Action()
             next_state = state.transition(ConvState.OUTRO, outro=OutroStep(statements=self._get_phrases("outro")),
